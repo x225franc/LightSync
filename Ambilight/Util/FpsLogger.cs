@@ -30,7 +30,6 @@ namespace Ambilight.Util
 #endif
 
         private readonly IEnumerator<TimeSpan> _enumerator;
-        private readonly IDisposable _loggingSubscription;
         private readonly IDisposable _valueUpdatingSubscription;
 
 
@@ -51,9 +50,10 @@ namespace Ambilight.Util
 
             _valueUpdatingSubscription = fpsObserverable.Subscribe(f => Fps = f);
 
-            _loggingSubscription = loggingTrigger
-                .WithLatestFrom(fpsObserverable, (_, fps) => fps)
-                .Subscribe(WriteFpsLog);
+            // Logging complètement désactivé pour éviter les clignotements
+            // _loggingSubscription = loggingTrigger
+            //     .WithLatestFrom(fpsObserverable, (_, fps) => fps)
+            //     .Subscribe(WriteFpsLog);
         }
 
         public int Fps { get; private set; }
@@ -64,7 +64,8 @@ namespace Ambilight.Util
         /// <param name="fps"></param>
         private void WriteFpsLog(int fps)
         {
-            _log.Debug($"there were {fps} frames for {_name} in the last second.");
+            // Logging désactivé pour éviter les clignotements
+            // _log.Debug($"there were {fps} frames for {_name} in the last second.");
         }
 
         /// <summary>
@@ -78,7 +79,6 @@ namespace Ambilight.Util
         public void Dispose()
         {
             _valueUpdatingSubscription?.Dispose();
-            _loggingSubscription?.Dispose();
             _frames?.Dispose();
             _enumerator?.Dispose();
         }

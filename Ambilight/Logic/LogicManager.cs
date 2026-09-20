@@ -1,5 +1,7 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Threading.Tasks;
 using Ambilight.DesktopDuplication;
 using Ambilight.GUI;
 using Colore;
@@ -14,6 +16,9 @@ namespace Ambilight.Logic
     /// </summary>
     class LogicManager
     {
+        private static readonly TimeSpan ChromaRetryInterval = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan ErrorLogInterval = TimeSpan.FromSeconds(30);
+
         private readonly Logger logger = LogManager.GetCurrentClassLogger();
 
         private KeyboardLogic _keyboardLogic;
@@ -22,6 +27,14 @@ namespace Ambilight.Logic
         private LinkLogic _linkLogic;
         private HeadsetLogic _headsetLogic;
         private KeypadLogic _keypadLogic;
+        private LampArrayLogic _lampArrayLogic;
+        private DesktopDuplicatorReader _reader;
+
+        // Kept as a field on purpose: the IChroma instance has a finalizer that calls into the
+        // native SDK, which must never run while the app is alive.
+        private IChroma _chroma;
+
+        private readonly Dictionary<string, DateTime> _lastErrorLog = new Dictionary<string, DateTime>();
 
         private readonly TraySettings settings;
 
@@ -34,57 +47,126 @@ namespace Ambilight.Logic
 
         private async void StartLogic(TraySettings settings)
         {
-            //Initializing Chroma SDK
-            IChroma chromaInstance = await ColoreProvider.CreateNativeAsync();
-            AppInfo appInfo = new AppInfo(
-                "Ambilight for Razer devices",
-                "Shows an ambilight effect on your Razer Chroma devices",
-                "Nico Jeske",
-                "ambilight@nicojeske.de",
-                new[]
+            try
+            {
+                // Everything that does not depend on Razer software starts first, so that the
+                // laptop keyboard (Windows Dynamic Lighting) works even when Synapse / the
+                // Chroma SDK is missing or not running.
+                _lampArrayLogic = new LampArrayLogic(settings);
+                _reader = new DesktopDuplicatorReader(this, settings);
+
+                await InitializeChromaWithRetryAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Unexpected error while starting the logic.");
+            }
+        }
+
+        private async Task InitializeChromaWithRetryAsync()
+        {
+            while (true)
+            {
+                IChroma chroma = null;
+                try
                 {
-                    ApiDeviceType.Headset,
-                    ApiDeviceType.Keyboard,
-                    ApiDeviceType.Keypad,
-                    ApiDeviceType.Mouse,
-                    ApiDeviceType.Mousepad,
-                    ApiDeviceType.ChromaLink
-                },
-                Category.Application);
-            await chromaInstance.InitializeAsync(appInfo);
+                    chroma = await ColoreProvider.CreateNativeAsync();
+                    AppInfo appInfo = new AppInfo(
+                        "Ambilight for Razer devices",
+                        "Shows an ambilight effect on your Razer Chroma devices",
+                        "Nico Jeske",
+                        "ambilight@nicojeske.de",
+                        new[]
+                        {
+                            ApiDeviceType.Headset,
+                            ApiDeviceType.Keyboard,
+                            ApiDeviceType.Keypad,
+                            ApiDeviceType.Mouse,
+                            ApiDeviceType.Mousepad,
+                            ApiDeviceType.ChromaLink
+                        },
+                        Category.Application);
+                    await chroma.InitializeAsync(appInfo);
 
-            _keyboardLogic = new KeyboardLogic(settings, chromaInstance);
-            _mousePadLogic = new MousePadLogic(settings, chromaInstance);
-            _mouseLogic = new MouseLogic(settings, chromaInstance);
-            _linkLogic = new LinkLogic(settings, chromaInstance);
-            _headsetLogic = new HeadsetLogic(settings, chromaInstance);
-            _keypadLogic = new KeypadLogic(settings, chromaInstance);
+                    _chroma = chroma;
+                    _keyboardLogic = new KeyboardLogic(settings, chroma);
+                    _mousePadLogic = new MousePadLogic(settings, chroma);
+                    _mouseLogic = new MouseLogic(settings, chroma);
+                    _linkLogic = new LinkLogic(settings, chroma);
+                    _headsetLogic = new HeadsetLogic(settings, chroma);
+                    _keypadLogic = new KeypadLogic(settings, chroma);
 
-            DesktopDuplicatorReader reader = new DesktopDuplicatorReader(this, settings);
+                    logger.Info("Razer Chroma SDK initialized.");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn(ex, $"Razer Chroma SDK not available (is Razer Synapse running?), retrying in {ChromaRetryInterval.TotalSeconds:0} s.");
+
+                    // A half-initialized instance must not be finalized: its finalizer would
+                    // call into the native SDK and crash the process.
+                    if (chroma != null)
+                        GC.SuppressFinalize(chroma);
+                }
+
+                await Task.Delay(ChromaRetryInterval);
+            }
         }
 
         /// <summary>
         /// Processes a captured Screenshot and create an Ambilight effect for the selected devices
         /// </summary>
-        /// <param name="newImage"></param>
+        /// <param name="img"></param>
         public void ProcessNewImage(Bitmap img)
         {
-            Bitmap newImage = new Bitmap(img);
+            // Skip processing if no devices are enabled
+            if (!settings.KeyboardEnabled && !settings.PadEnabled && !settings.MouseEnabled &&
+                !settings.LinkEnabled && !settings.HeadsetEnabled && !settings.KeypadEnabeled &&
+                !settings.LaptopKeyboardEnabled)
+            {
+                return;
+            }
 
+            // No need to create a copy - the bitmap is already managed by the reader
+            // and each Process call creates its own resized copies.
+            // Each device is isolated so that a failure on one (e.g. Synapse closed) can never
+            // stop the others - in particular the laptop keyboard, which is independent of Razer.
             if (settings.KeyboardEnabled)
-                _keyboardLogic.Process(newImage);
+                SafeProcess("keyboard", _keyboardLogic, img);
             if (settings.PadEnabled)
-                _mousePadLogic.Process(newImage);
+                SafeProcess("mousepad", _mousePadLogic, img);
             if (settings.MouseEnabled)
-                _mouseLogic.Process(newImage);
+                SafeProcess("mouse", _mouseLogic, img);
             if (settings.LinkEnabled)
-                _linkLogic.Process(newImage);
+                SafeProcess("chroma link", _linkLogic, img);
             if (settings.HeadsetEnabled)
-                _headsetLogic.Process(newImage);
+                SafeProcess("headset", _headsetLogic, img);
             if (settings.KeypadEnabeled)
-                _keypadLogic.Process(newImage);
+                SafeProcess("keypad", _keypadLogic, img);
+            if (settings.LaptopKeyboardEnabled)
+                SafeProcess("laptop keyboard", _lampArrayLogic, img);
+        }
 
-            newImage.Dispose();
+        private void SafeProcess(string device, IDeviceLogic logic, Bitmap img)
+        {
+            // Null until the Chroma SDK has been initialized.
+            if (logic == null)
+                return;
+
+            try
+            {
+                logic.Process(img);
+            }
+            catch (Exception ex)
+            {
+                // Rate limited: this runs once per captured frame.
+                var now = DateTime.UtcNow;
+                if (!_lastErrorLog.TryGetValue(device, out var last) || now - last > ErrorLogInterval)
+                {
+                    _lastErrorLog[device] = now;
+                    logger.Error(ex, $"Error processing image for {device}");
+                }
+            }
         }
     }
 }

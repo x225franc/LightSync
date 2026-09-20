@@ -11,6 +11,8 @@ namespace Ambilight
     {
 
         private static Logger _log = LogManager.GetCurrentClassLogger();
+        private static ImageAttributes _cachedImageAttributes;
+        private static ColorMatrix _cachedColorMatrix;
         /// <summary>
         /// Resize an image to the specified width and height.
         /// </summary>
@@ -48,6 +50,12 @@ namespace Ambilight
         /// <returns></returns>
         public static Bitmap ApplySaturation(Bitmap srcBitmap, float saturation)
         {
+            // Skip processing if saturation is 1.0 (no change needed)
+            if (Math.Abs(saturation - 1.0f) < 0.001f)
+            {
+                return srcBitmap;
+            }
+
             float rWeight = 0.3086f;
             float gWeight = 0.6094f;
             float bWeight = 0.0820f;
@@ -67,29 +75,37 @@ namespace Ambilight
             // Create a Graphics
             using (Graphics gr = Graphics.FromImage(returnBitmap))
             {
-                // ColorMatrix elements
-                float[][] ptsArray = {
-                    new float[] {a,  b,  c,  0, 0},
-                    new float[] {d,  e,  f,  0, 0},
-                    new float[] {g,  h,  i,  0, 0},
-                    new float[] {0,  0,  0,  1, 0},
-                    new float[] {0, 0, 0, 0, 1}
-                };
-                // Create ColorMatrix
-                ColorMatrix clrMatrix = new ColorMatrix(ptsArray);
-                // Create ImageAttributes
-                ImageAttributes imgAttribs = new ImageAttributes();
+                // Reuse cached ColorMatrix and ImageAttributes if possible
+                if (_cachedColorMatrix == null)
+                {
+                    _cachedColorMatrix = new ColorMatrix();
+                }
+                if (_cachedImageAttributes == null)
+                {
+                    _cachedImageAttributes = new ImageAttributes();
+                }
+
+                // Update ColorMatrix values
+                _cachedColorMatrix.Matrix00 = a;
+                _cachedColorMatrix.Matrix01 = b;
+                _cachedColorMatrix.Matrix02 = c;
+                _cachedColorMatrix.Matrix10 = d;
+                _cachedColorMatrix.Matrix11 = e;
+                _cachedColorMatrix.Matrix12 = f;
+                _cachedColorMatrix.Matrix20 = g;
+                _cachedColorMatrix.Matrix21 = h;
+                _cachedColorMatrix.Matrix22 = i;
+
                 // Set color matrix
-                imgAttribs.SetColorMatrix(clrMatrix,
+                _cachedImageAttributes.SetColorMatrix(_cachedColorMatrix,
                     ColorMatrixFlag.Default,
                     ColorAdjustType.Default);
-                // Draw Image with no effects
-                //gr.DrawImage(srcBitmap, 0, 0, 200, 200);
+
                 // Draw Image with image attributes
                 gr.DrawImage(srcBitmap,
                     new Rectangle(0, 0, srcBitmap.Width, srcBitmap.Height),
                     0, 0, srcBitmap.Width, srcBitmap.Height,
-                    GraphicsUnit.Pixel, imgAttribs);
+                    GraphicsUnit.Pixel, _cachedImageAttributes);
             }
 
             return returnBitmap;

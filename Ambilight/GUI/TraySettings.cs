@@ -1,15 +1,10 @@
-﻿using IWshRuntimeLibrary;
-using Microsoft.VisualBasic;
+using IWshRuntimeLibrary;
+using Microsoft.Win32;
 using NLog;
 using System;
-using System.Collections.Generic;
 using System.Configuration;
 using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using Colore.Effects.Keyboard;
 
@@ -33,12 +28,27 @@ namespace Ambilight.GUI
         public bool AmbiModeEnabled { get; private set; }
         public bool UltrawideModeEnabled { get; private set; }
         public bool AutostartEnabled { get; private set; }
+        public bool LaptopKeyboardEnabled { get; private set; }
+        public int LaptopBrightness { get; private set; } = 100;
+        public Logic.LaptopKeyboardEffect LaptopEffect { get; private set; }
+        public int LaptopEffectSpeed { get; private set; } = 50;
+        public bool LaptopEffectReverse { get; private set; }
+        public Color LaptopColor { get; private set; } = Color.FromArgb(255, 45, 45);
         public int SelectedMonitor { get; set; }
 
+        // Sliders and the color wheel change values continuously while dragging; persisting on
+        // every change would hammer the disk, so saves are coalesced.
+        private System.Threading.Timer _saveTimer;
+
         private NotifyIcon notifyIcon;
+        private ContextMenuStrip _trayMenu;
+        private Icon _trayIcon;
+        private Control _uiMarshal;
+        private volatile bool _rebuildPending;
 
         private readonly Logger logger = LogManager.GetCurrentClassLogger();
 
+        public event EventHandler SettingsRequested;
 
         public TraySettings()
         {
@@ -46,6 +56,7 @@ namespace Ambilight.GUI
             KeyboardHeight = KeyboardConstants.MaxRows;
             loadConfig();
             Thread trayThread = new Thread(InitializeTray);
+            trayThread.SetApartmentState(ApartmentState.STA);
             trayThread.Start();
         }
 
@@ -62,11 +73,33 @@ namespace Ambilight.GUI
                 int _keyboardWidthProperty = Properties.Settings.Default.keyboardWidth;
                 AutostartEnabled = Properties.Settings.Default.autostartEnabled;
                 SelectedMonitor = Properties.Settings.Default.monitor;
-               
 
+                KeyboardEnabled = Properties.Settings.Default.keyboardEnabled;
+                MouseEnabled = Properties.Settings.Default.mouseEnabled;
+                PadEnabled = Properties.Settings.Default.mousematEnabled;
+                HeadsetEnabled = Properties.Settings.Default.headsetEnabled;
+                KeypadEnabeled = Properties.Settings.Default.keypadEnabled;
+                LinkEnabled = Properties.Settings.Default.linkEnabled;
+                AmbiModeEnabled = Properties.Settings.Default.ambiEnabled;
+                UltrawideModeEnabled = Properties.Settings.Default.ultrawideEnabled;
+                LaptopKeyboardEnabled = Properties.Settings.Default.laptopKeyboardEnabled;
+                LaptopBrightness = Math.Max(0, Math.Min(100, Properties.Settings.Default.laptopBrightness));
+                LaptopEffectSpeed = Math.Max(1, Math.Min(100, Properties.Settings.Default.laptopEffectSpeed));
+                LaptopEffectReverse = Properties.Settings.Default.laptopEffectReverse;
+                LaptopEffect = Enum.IsDefined(typeof(Logic.LaptopKeyboardEffect), Properties.Settings.Default.laptopEffect)
+                    ? (Logic.LaptopKeyboardEffect)Properties.Settings.Default.laptopEffect
+                    : Logic.LaptopKeyboardEffect.ScreenAmbilight;
+                try
+                {
+                    LaptopColor = ColorTranslator.FromHtml(Properties.Settings.Default.laptopColor);
+                }
+                catch (Exception)
+                {
+                    logger.Warn("Invalid laptopColor, using the default.");
+                }
 
                 if (_keyboardWidthProperty >= 0 && _keyboardWidthProperty < KeyboardConstants.MaxColumns)
-                {                   
+                {
                     KeyboardWidth = _keyboardWidthProperty;
                 } else
                 {
@@ -93,282 +126,347 @@ namespace Ambilight.GUI
             logger.Info("Keyboard width: " + KeyboardWidth);
             logger.Info("Keyboard height: " + KeyboardHeight);
             logger.Info("Max FPS: " + Tickrate);
-            logger.Info("Saturation: " + Saturation);   
+            logger.Info("Saturation: " + Saturation);
         }
 
         /// <summary>
-        /// Initializes the tray icons
+        /// Initializes the tray icon and its (minimal) context menu. All actual
+        /// configuration now happens in the WPF-UI SettingsWindow.
         /// </summary>
         private void InitializeTray()
-        {            
-            MenuItem _keyboardEnabled = new MenuItem("Keyboard enabled", (sender, args) =>
+        {
+            // An exception thrown while painting the tray menu (typically right
+            // after resuming from hibernation, when GDI/DWM resources are stale)
+            // used to escape through the native window procedure and terminate
+            // the whole process (0xC000041D). Log and swallow instead.
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (sender, e) =>
+                logger.Error(e.Exception, "Unhandled exception on the tray UI thread (ignored).");
+
+            // Hidden control whose only job is to give this thread something to
+            // marshal work onto from SystemEvents' own thread.
+            _uiMarshal = new Control();
+            var forceHandle = _uiMarshal.Handle;
+
+            BuildTrayIcon();
+
+            SystemEvents.PowerModeChanged += (sender, e) =>
             {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.keyboardEnabled = (sender as MenuItem).Checked;
-                KeyboardEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-
-            MenuItem _mouseEnabled = new MenuItem("Mouse enabled", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.mouseEnabled = (sender as MenuItem).Checked;
-                MouseEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-
-            MenuItem _mousematEnabled = new MenuItem("Mousemat enabled", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.mousematEnabled = (sender as MenuItem).Checked;
-                PadEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-            
-            MenuItem _headsetEnabled = new MenuItem("Headset enabled", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.headsetEnabled = (sender as MenuItem).Checked;
-                HeadsetEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-            
-            MenuItem _keypadEnabled = new MenuItem("Keypad enabled", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.keypadEnabled = (sender as MenuItem).Checked;
-                KeypadEnabeled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-
-            MenuItem _linkEnabled = new MenuItem("LinkChroma enabled", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.linkEnabled = (sender as MenuItem).Checked;
-                LinkEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-
-            MenuItem _ambiModeEnabled = new MenuItem("'Real' Ambilight mode", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.ambiEnabled = (sender as MenuItem).Checked;
-                AmbiModeEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-
-            MenuItem _ultrawideModeEnabled = new MenuItem("Ultrawide Monitor mode", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.ultrawideEnabled = (sender as MenuItem).Checked;
-                UltrawideModeEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-
-            MenuItem _autostart = new MenuItem("Autostart", (sender, args) =>
-            {
-                EnableMenuItemOnClick(sender, args);
-                Properties.Settings.Default.autostartEnabled = (sender as MenuItem).Checked;
-                changeAutoStart();
-                AutostartEnabled = (sender as MenuItem).Checked;
-                Properties.Settings.Default.Save();
-            });
-
-            _keyboardEnabled.Checked = Properties.Settings.Default.keyboardEnabled;
-            KeyboardEnabled = Properties.Settings.Default.keyboardEnabled;
-            _mouseEnabled.Checked = Properties.Settings.Default.mouseEnabled;
-            MouseEnabled = Properties.Settings.Default.mouseEnabled;
-            _mousematEnabled.Checked = Properties.Settings.Default.mousematEnabled;
-            PadEnabled = Properties.Settings.Default.mousematEnabled;
-            _headsetEnabled.Checked = Properties.Settings.Default.headsetEnabled;
-            HeadsetEnabled = Properties.Settings.Default.headsetEnabled;
-            _keypadEnabled.Checked = Properties.Settings.Default.keypadEnabled;
-            KeypadEnabeled = Properties.Settings.Default.keypadEnabled;
-            _linkEnabled.Checked = Properties.Settings.Default.linkEnabled;
-            LinkEnabled = Properties.Settings.Default.linkEnabled;
-            _ambiModeEnabled.Checked = Properties.Settings.Default.ambiEnabled;
-            AmbiModeEnabled = Properties.Settings.Default.ambiEnabled;
-            _ultrawideModeEnabled.Checked = Properties.Settings.Default.ambiEnabled;
-            UltrawideModeEnabled = Properties.Settings.Default.ultrawideEnabled;
-            _autostart.Checked = checkAutostart(Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "/Ambilight.lnk");
-            AutostartEnabled = Properties.Settings.Default.autostartEnabled;
-
-            var components = new System.ComponentModel.Container();
-            var contextMenu = new ContextMenu();
-
-            contextMenu.MenuItems.Add("Change max fps", ChangeTickrateHandler);
-            contextMenu.MenuItems.Add("Change Saturation", ChangeSaturationHandler);
-            contextMenu.MenuItems.Add("Set Manual keyboard size", changeKeyboardSizeHandler);
-            contextMenu.MenuItems.Add("Change Monitor", changeMonitorHandler);
-            contextMenu.MenuItems.Add("-");
-            contextMenu.MenuItems.Add(_ambiModeEnabled);
-            contextMenu.MenuItems.Add(_ultrawideModeEnabled);
-            contextMenu.MenuItems.Add(_autostart);
-            contextMenu.MenuItems.Add("-");
-
-            contextMenu.MenuItems.Add(_keyboardEnabled);
-            contextMenu.MenuItems.Add(_mouseEnabled);
-            contextMenu.MenuItems.Add(_mousematEnabled);
-            contextMenu.MenuItems.Add(_headsetEnabled);
-            contextMenu.MenuItems.Add(_keypadEnabled);
-            contextMenu.MenuItems.Add(_linkEnabled);
-            
-            contextMenu.MenuItems.Add("-");
-            contextMenu.MenuItems.Add("Exit", (sender, args) => { notifyIcon.Dispose();Environment.Exit(0); });
-
-
-             notifyIcon = new NotifyIcon(components)
-            {
-                Icon = new Icon("Color_Wheel.ico"),
-                Text = "Razer Ambilight",
-                Visible = true
+                if (e.Mode == PowerModes.Resume)
+                    RebuildTrayIconSoon();
             };
+            SystemEvents.SessionSwitch += (sender, e) =>
+            {
+                if (e.Reason == SessionSwitchReason.SessionUnlock)
+                    RebuildTrayIconSoon();
+            };
+            SystemEvents.DisplaySettingsChanged += (sender, e) => RebuildTrayIconSoon();
 
-            logger.Info("Keyboard Enabled: " + _keyboardEnabled.Checked);
-            logger.Info("Mouse Enabled: " + _mouseEnabled.Checked);
-            logger.Info("Mousemat Enabled: " + _mousematEnabled.Checked);
-            logger.Info("Headset Enabled: " + _headsetEnabled.Checked);
-            logger.Info("Keypad Enabled: " + _keypadEnabled.Checked);
-            logger.Info("ChromaLink Enabled: " + _linkEnabled.Checked);
-            logger.Info("Ambilight mode: " + _ambiModeEnabled.Checked);
-            logger.Info("Ultrawide mode: " + _ultrawideModeEnabled.Checked);
+            logger.Info("Keyboard Enabled: " + KeyboardEnabled);
+            logger.Info("Mouse Enabled: " + MouseEnabled);
+            logger.Info("Mousemat Enabled: " + PadEnabled);
+            logger.Info("Headset Enabled: " + HeadsetEnabled);
+            logger.Info("Keypad Enabled: " + KeypadEnabeled);
+            logger.Info("ChromaLink Enabled: " + LinkEnabled);
+            logger.Info("Ambilight mode: " + AmbiModeEnabled);
+            logger.Info("Ultrawide mode: " + UltrawideModeEnabled);
 
-            notifyIcon.ContextMenu = contextMenu;
             Application.Run();
         }
 
-        private void changeMonitorHandler(object sender, EventArgs e)
+        private void BuildTrayIcon()
         {
-            Monitor monitorWindow = new Monitor(monitorChangedHandler,Properties.Settings.Default.monitor);
-            monitorWindow.Show();
-        }
-        private void monitorChangedHandler(object sender, EventArgs e)
-        {
-            Properties.Settings.Default.monitor = ((ComboBox)sender).SelectedIndex;
-            Properties.Settings.Default.Save();
-            DialogResult result=MessageBox.Show("The application must be restarted to apply this change. Do you want to restart now ?", "Restart required", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (result == DialogResult.Yes)
+            var contextMenu = new ContextMenuStrip
             {
-                notifyIcon.Dispose();
-                System.Diagnostics.Process.Start(Application.ExecutablePath);
-                Environment.Exit(0);
-            }
-                
+                Renderer = new DarkContextMenuRenderer(),
+                ShowImageMargin = false
+            };
+
+            contextMenu.Items.Add("Settings", null, (sender, args) => RaiseSettingsRequested());
+            contextMenu.Items.Add(new ToolStripSeparator());
+            contextMenu.Items.Add("Exit", null, (sender, args) => ExitApplication());
+
+            _trayMenu = contextMenu;
+            _trayIcon = new Icon(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Color_Wheel.ico"));
+
+            notifyIcon = new NotifyIcon
+            {
+                Icon = _trayIcon,
+                Text = "Razer Ambilight",
+                Visible = true,
+                ContextMenuStrip = contextMenu
+            };
+            notifyIcon.DoubleClick += (sender, args) => RaiseSettingsRequested();
         }
 
         /// <summary>
-        /// Enables a MenuItem to be checkable
+        /// After hibernation/resume the taskbar and the GPU-backed drop-down
+        /// windows can come back in a broken state (blank white menu, then a
+        /// crash on click). Recreating the icon and menu from scratch once the
+        /// shell has settled avoids ever touching the stale ones.
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private static void EnableMenuItemOnClick(object sender, EventArgs e)
+        private void RebuildTrayIconSoon()
         {
-            MenuItem item = sender as MenuItem;
-            item.Checked = !item.Checked;
-        }
-        /// <summary>
-        /// Enables or disables autostart
-        /// </summary>
-        /// <returns>True if autostart got enabled. False if autostart got disabled</returns>
-        private bool changeAutoStart()
-        {
-            string shortcutPath= Environment.GetFolderPath(Environment.SpecialFolder.Startup)+"/Ambilight.lnk";
-            if(checkAutostart(shortcutPath))
-            {
-                System.IO.File.Delete(shortcutPath);
-                return false;
-            }
-            else
-            {
-                WshShell shell = new WshShell();
-                IWshShortcut shortcut = (IWshShortcut)shell.CreateShortcut(Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "/Ambilight.lnk");
-                shortcut.Description = "Ambilight for Razer devices";
-                shortcut.TargetPath= System.IO.Path.GetDirectoryName(Application.ExecutablePath)+"/Ambilight.exe";
-                shortcut.WorkingDirectory= System.IO.Path.GetDirectoryName(Application.ExecutablePath);
-                shortcut.Save();
-                return true;
-            }
-            
-
-        }
-        /// <summary>
-        /// Checks if autostart is enabled or not
-        /// </summary>
-        /// <param name="shortcutPath">The Filepath of the shortcut</param>
-        /// <returns>True if autostart is enabled. False if autostart is not enabled</returns>
-        private bool checkAutostart(string shortcutPath)
-        {
-            if (System.IO.File.Exists(shortcutPath))
-                return true;
-            else
-                return false;
-        }
-        private void changeKeyboardSizeHandler(object sender, EventArgs e)
-        {
-            KeyboardSizeControl k = new KeyboardSizeControl(keyboardSizeChangedHandler, KeyboardWidth, KeyboardHeight);
-            k.Show();
-        }
-
-        private void keyboardSizeChangedHandler(object sender, EventArgs e)
-        {
-            KeyboardSizeControl k = sender as KeyboardSizeControl;
-            int KeyboardWidthSetting = k.GetTxtWidth();
-            int KeyboardHeightSetting = k.GetTxtHeight();
-
-            if (KeyboardWidthSetting < 0 || KeyboardWidthSetting > KeyboardConstants.MaxColumns || KeyboardHeightSetting < 0 || KeyboardHeightSetting > KeyboardConstants.MaxRows)
-            {
-                k.errorReport("Input invalid");
+            if (_uiMarshal == null || !_uiMarshal.IsHandleCreated || _rebuildPending)
                 return;
-            }
 
-            KeyboardHeight = KeyboardHeightSetting;
-            KeyboardWidth = KeyboardWidthSetting;
-
-
-            Properties.Settings.Default.keyboardWidth = KeyboardWidthSetting;
-            Properties.Settings.Default.keyboardHeight = KeyboardHeightSetting;
-            Properties.Settings.Default.Save();
-
-        }
-
-        /// <summary>
-        /// Enables the user to manually change the saturation
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void ChangeSaturationHandler(object sender, EventArgs e)
-        {
-            SaturationControl c = new SaturationControl(SaturationChangedHandler, Saturation * 100);
-            c.ShowDialog();
-        }
-
-        private void SaturationChangedHandler(object sender, EventArgs e)
-        {
-            var trackBar = (TrackBar)sender;
-            float value = trackBar.Value;
-            Saturation = value / 100f;
-            Properties.Settings.Default.saturation = Saturation;
-            Properties.Settings.Default.Save();
-        }
-
-        /// <summary>
-        /// Enables the user to manually change the tickrate with the trayicon.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void ChangeTickrateHandler(object sender, EventArgs e)
-        {
-            var tickrateString = Interaction.InputBox("New max fps", "change max fps", Tickrate.ToString());
-            var newTickrate = Tickrate;
-            if (!int.TryParse(tickrateString, out newTickrate) || newTickrate < 1 || newTickrate > 200)
+            _rebuildPending = true;
+            _uiMarshal.BeginInvoke(new Action(() =>
             {
-                MessageBox.Show("Invalid input.", "Eror", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
+                var timer = new System.Windows.Forms.Timer { Interval = 3000 };
+                timer.Tick += (sender, args) =>
+                {
+                    timer.Stop();
+                    timer.Dispose();
+                    _rebuildPending = false;
+                    RebuildTrayIcon();
+                };
+                timer.Start();
+            }));
+        }
 
-            Tickrate = newTickrate;
-            Properties.Settings.Default["tickrate"] = Tickrate;
+        private void RebuildTrayIcon()
+        {
+            try
+            {
+                if (_trayMenu != null && _trayMenu.Visible)
+                    return;
+
+                logger.Debug("Rebuilding tray icon and menu.");
+
+                var oldIcon = notifyIcon;
+                var oldMenu = _trayMenu;
+                var oldTrayIcon = _trayIcon;
+
+                BuildTrayIcon();
+
+                if (oldIcon != null)
+                {
+                    oldIcon.Visible = false;
+                    oldIcon.Dispose();
+                }
+                oldMenu?.Dispose();
+                oldTrayIcon?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Failed to rebuild the tray icon.");
+            }
+        }
+
+        /// <summary>Opens the settings window as soon as the tray thread is up (used by --show-settings).</summary>
+        public void RequestShowSettings()
+        {
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                for (int i = 0; i < 100 && (_uiMarshal == null || !_uiMarshal.IsHandleCreated); i++)
+                    Thread.Sleep(100);
+
+                _uiMarshal?.BeginInvoke(new Action(RaiseSettingsRequested));
+            });
+        }
+
+        private void RaiseSettingsRequested()
+        {
+            SettingsRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Restarts the application. Used after changing settings (like the
+        /// selected monitor) that can't be applied without recreating the
+        /// desktop duplicator from scratch.
+        /// </summary>
+        public void RestartApplication()
+        {
             Properties.Settings.Default.Save();
+            notifyIcon.Dispose();
+            System.Diagnostics.Process.Start(Application.ExecutablePath, "--restarted");
+            Environment.Exit(0);
+        }
+
+        public void ExitApplication()
+        {
+            Properties.Settings.Default.Save();
+            notifyIcon.Dispose();
+            Environment.Exit(0);
+        }
+
+        public void SetKeyboardEnabled(bool value)
+        {
+            KeyboardEnabled = value;
+            Properties.Settings.Default.keyboardEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetMouseEnabled(bool value)
+        {
+            MouseEnabled = value;
+            Properties.Settings.Default.mouseEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetPadEnabled(bool value)
+        {
+            PadEnabled = value;
+            Properties.Settings.Default.mousematEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetHeadsetEnabled(bool value)
+        {
+            HeadsetEnabled = value;
+            Properties.Settings.Default.headsetEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetKeypadEnabled(bool value)
+        {
+            KeypadEnabeled = value;
+            Properties.Settings.Default.keypadEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetLinkEnabled(bool value)
+        {
+            LinkEnabled = value;
+            Properties.Settings.Default.linkEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetLaptopKeyboardEnabled(bool value)
+        {
+            LaptopKeyboardEnabled = value;
+            Properties.Settings.Default.laptopKeyboardEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetLaptopBrightness(int value)
+        {
+            LaptopBrightness = Math.Max(0, Math.Min(100, value));
+            Properties.Settings.Default.laptopBrightness = LaptopBrightness;
+            ScheduleSave();
+        }
+
+        public void SetLaptopEffect(Logic.LaptopKeyboardEffect value)
+        {
+            LaptopEffect = value;
+            Properties.Settings.Default.laptopEffect = (int)value;
+            ScheduleSave();
+        }
+
+        public void SetLaptopEffectSpeed(int value)
+        {
+            LaptopEffectSpeed = Math.Max(1, Math.Min(100, value));
+            Properties.Settings.Default.laptopEffectSpeed = LaptopEffectSpeed;
+            ScheduleSave();
+        }
+
+        public void SetLaptopEffectReverse(bool value)
+        {
+            LaptopEffectReverse = value;
+            Properties.Settings.Default.laptopEffectReverse = value;
+            ScheduleSave();
+        }
+
+        public void SetLaptopColor(Color value)
+        {
+            LaptopColor = Color.FromArgb(255, value.R, value.G, value.B);
+            Properties.Settings.Default.laptopColor = ColorTranslator.ToHtml(LaptopColor);
+            ScheduleSave();
+        }
+
+        private void ScheduleSave()
+        {
+            if (_saveTimer == null)
+                _saveTimer = new System.Threading.Timer(_ => Properties.Settings.Default.Save(), null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+
+            _saveTimer.Change(600, System.Threading.Timeout.Infinite);
+        }
+
+        public void SetAmbiModeEnabled(bool value)
+        {
+            AmbiModeEnabled = value;
+            Properties.Settings.Default.ambiEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetUltrawideModeEnabled(bool value)
+        {
+            UltrawideModeEnabled = value;
+            Properties.Settings.Default.ultrawideEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetTickrate(int value)
+        {
+            Tickrate = value;
+            Properties.Settings.Default["tickrate"] = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetSaturation(float value)
+        {
+            Saturation = value;
+            Properties.Settings.Default.saturation = value;
+            Properties.Settings.Default.Save();
+        }
+
+        /// <summary>
+        /// Sets the monitor to capture. Takes effect after a restart, since the
+        /// desktop duplicator is built once per adapter/output at startup.
+        /// </summary>
+        public void SetMonitor(int index)
+        {
+            SelectedMonitor = index;
+            Properties.Settings.Default.monitor = index;
+            Properties.Settings.Default.Save();
+        }
+
+        public bool SetKeyboardSize(int width, int height)
+        {
+            if (width < 0 || width > KeyboardConstants.MaxColumns || height < 0 || height > KeyboardConstants.MaxRows)
+                return false;
+
+            KeyboardWidth = width;
+            KeyboardHeight = height;
+            Properties.Settings.Default.keyboardWidth = width;
+            Properties.Settings.Default.keyboardHeight = height;
+            Properties.Settings.Default.Save();
+            return true;
+        }
+
+        public void SetAutostartEnabled(bool value)
+        {
+            if (value == AutostartEnabled)
+                return;
+
+            if (value)
+                CreateAutostartShortcut();
+            else
+                RemoveAutostartShortcut();
+
+            AutostartEnabled = value;
+            Properties.Settings.Default.autostartEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        private static string AutostartShortcutPath =>
+            Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "/Ambilight.lnk";
+
+        private void CreateAutostartShortcut()
+        {
+            WshShell shell = new WshShell();
+            IWshShortcut shortcut = (IWshShortcut)shell.CreateShortcut(AutostartShortcutPath);
+            shortcut.Description = "Ambilight for Razer devices";
+            shortcut.TargetPath = System.IO.Path.GetDirectoryName(Application.ExecutablePath) + "/Ambilight.exe";
+            shortcut.WorkingDirectory = System.IO.Path.GetDirectoryName(Application.ExecutablePath);
+            shortcut.Save();
+        }
+
+        private void RemoveAutostartShortcut()
+        {
+            if (System.IO.File.Exists(AutostartShortcutPath))
+                System.IO.File.Delete(AutostartShortcutPath);
         }
     }
 }

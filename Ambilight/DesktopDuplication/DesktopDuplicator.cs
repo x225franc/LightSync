@@ -68,26 +68,53 @@ namespace Ambilight.DesktopDuplication
                     throw new DesktopDuplicationException(
                         "There is already the maximum number of applications using the Desktop Duplication API running, please close one of the applications and try again.");
                 }
+
+                // Any other failure (e.g. right after a resolution change, display
+                // reconfiguration or waking from sleep) also means this duplicator
+                // instance is unusable. Previously this was silently swallowed,
+                // leaving _outputDuplication null and causing NullReferenceExceptions
+                // down the line instead of a clean, catchable error.
+                throw new DesktopDuplicationException("Could not duplicate the output device.", ex);
             }
         }
 
         private readonly FpsLogger _desktopFrameLogger = new FpsLogger("DesktopDuplication");
-
 
         /// <summary>
         /// Retrieves the latest desktop image and associated metadata.
         /// </summary>
         public Bitmap GetLatestFrame(Bitmap reusableImage)
         {
-            // Try to get the latest frame; this may timeout
-            var succeeded = RetrieveFrame();
-            if (!succeeded)
+            try
+            {
+                // Try to get the latest frame; this may timeout
+                var succeeded = RetrieveFrame();
+                if (!succeeded)
+                    return null;
+
+                _desktopFrameLogger.TrackSingleFrame();
+
+                return ProcessFrame(reusableImage);
+            }
+            catch (DesktopDuplicationException)
+            {
+                // Let this bubble up: it signals the capture context is dead
+                // (DXGI access lost / device removed) and the caller needs to
+                // dispose this instance and create a fresh one.
+                throw;
+            }
+            catch (SharpDXException ex)
+            {
+                // Log the error but handle properly
+                Debug.WriteLine($"SharpDX error in GetLatestFrame: {ex.Message}");
                 return null;
-
-            _desktopFrameLogger.TrackSingleFrame();
-
-            return ProcessFrame(reusableImage);
-
+            }
+            catch (Exception ex)
+            {
+                // Log any other exception
+                Debug.WriteLine($"Unexpected error in GetLatestFrame: {ex.Message}");
+                return null;
+            }
         }
 
         private const int mipMapLevel = 2;
@@ -95,131 +122,211 @@ namespace Ambilight.DesktopDuplication
 
         private bool RetrieveFrame()
         {
+            if (_device == null || _device.IsDisposed)
+            {
+                Debug.WriteLine("Device is null or disposed");
+                return false;
+            }
 
             var desktopWidth = _outputDescription.DesktopBounds.GetWidth();
             var desktopHeight = _outputDescription.DesktopBounds.GetHeight();
 
-            if (_stagingTexture == null)
-            {
-                _stagingTexture = new Texture2D(_device, new Texture2DDescription()
-                {
-                    CpuAccessFlags = CpuAccessFlags.Read,
-                    BindFlags = BindFlags.None,
-                    Format = Format.B8G8R8A8_UNorm,
-                    Width = desktopWidth / scalingFactor,
-                    Height = desktopHeight / scalingFactor,
-                    OptionFlags = ResourceOptionFlags.None,
-                    MipLevels = 1,
-                    ArraySize = 1,
-                    SampleDescription = { Count = 1, Quality = 0 },
-                    Usage = ResourceUsage.Staging // << can be read by CPU
-                });
-            }
-            SharpDX.DXGI.Resource desktopResource;
             try
             {
-                if (_outputDuplication == null) throw new Exception("_outputDuplication is null");
-                _outputDuplication.AcquireNextFrame(500, out var frameInformation, out desktopResource);
-            }
-            catch (SharpDXException ex)
-            {
-                if (ex.ResultCode.Code == SharpDX.DXGI.ResultCode.WaitTimeout.Result.Code)
+                if (_stagingTexture == null || _stagingTexture.IsDisposed)
                 {
-                    return false;
+                    _stagingTexture = new Texture2D(_device, new Texture2DDescription()
+                    {
+                        CpuAccessFlags = CpuAccessFlags.Read,
+                        BindFlags = BindFlags.None,
+                        Format = Format.B8G8R8A8_UNorm,
+                        Width = desktopWidth / scalingFactor,
+                        Height = desktopHeight / scalingFactor,
+                        OptionFlags = ResourceOptionFlags.None,
+                        MipLevels = 1,
+                        ArraySize = 1,
+                        SampleDescription = { Count = 1, Quality = 0 },
+                        Usage = ResourceUsage.Staging // << can be read by CPU
+                    });
                 }
 
-                throw new DesktopDuplicationException("Failed to acquire next frame.", ex);
-            }
-            if (desktopResource == null) throw new Exception("desktopResource is null");
-
-            if (_smallerTexture == null)
-            {
-                _smallerTexture = new Texture2D(_device, new Texture2DDescription
+                SharpDX.DXGI.Resource desktopResource = null;
+                try
                 {
-                    CpuAccessFlags = CpuAccessFlags.None,
-                    BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
-                    Format = Format.B8G8R8A8_UNorm,
-                    Width = desktopWidth,
-                    Height = desktopHeight,
-                    OptionFlags = ResourceOptionFlags.GenerateMipMaps,
-                    MipLevels = mipMapLevel + 1,
-                    ArraySize = 1,
-                    SampleDescription = { Count = 1, Quality = 0 },
-                    Usage = ResourceUsage.Default
-                });
-                _smallerTextureView = new ShaderResourceView(_device, _smallerTexture);
+                    if (_outputDuplication == null) throw new Exception("_outputDuplication is null");
+                    _outputDuplication.AcquireNextFrame(500, out var frameInformation, out desktopResource);
+
+                    if (desktopResource == null) throw new Exception("desktopResource is null");
+
+                    if (_smallerTexture == null || _smallerTexture.IsDisposed)
+                    {
+                        if (_smallerTextureView != null && !_smallerTextureView.IsDisposed)
+                        {
+                            _smallerTextureView.Dispose();
+                            _smallerTextureView = null;
+                        }
+
+                        _smallerTexture = new Texture2D(_device, new Texture2DDescription
+                        {
+                            CpuAccessFlags = CpuAccessFlags.None,
+                            BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+                            Format = Format.B8G8R8A8_UNorm,
+                            Width = desktopWidth,
+                            Height = desktopHeight,
+                            OptionFlags = ResourceOptionFlags.GenerateMipMaps,
+                            MipLevels = mipMapLevel + 1,
+                            ArraySize = 1,
+                            SampleDescription = { Count = 1, Quality = 0 },
+                            Usage = ResourceUsage.Default
+                        });
+                        _smallerTextureView = new ShaderResourceView(_device, _smallerTexture);
+                    }
+
+                    using (var tempTexture = desktopResource.QueryInterface<Texture2D>())
+                    {
+                        if (_device == null) throw new Exception("_device is null");
+                        if (_device.ImmediateContext == null) throw new Exception("_device.ImmediateContext is null");
+
+                        _device.ImmediateContext.CopySubresourceRegion(tempTexture, 0, null, _smallerTexture, 0);
+                    }
+
+                    // Generates the mipmap of the screen
+                    if (_smallerTextureView != null && !_smallerTextureView.IsDisposed &&
+                        _device != null && _device.ImmediateContext != null)
+                    {
+                        _device.ImmediateContext.GenerateMips(_smallerTextureView);
+
+                        // Copy the mipmap 1 of smallerTexture (size/2) to the staging texture
+                        _device.ImmediateContext.CopySubresourceRegion(_smallerTexture, mipMapLevel, null, _stagingTexture, 0);
+                    }
+
+                    return true;
+                }
+                catch (SharpDXException ex)
+                {
+                    if (ex.ResultCode.Code == SharpDX.DXGI.ResultCode.WaitTimeout.Result.Code)
+                    {
+                        return false;
+                    }
+
+                    if (ex.ResultCode.Code == SharpDX.DXGI.ResultCode.AccessLost.Result.Code ||
+                        ex.ResultCode.Code == SharpDX.DXGI.ResultCode.DeviceRemoved.Result.Code ||
+                        ex.ResultCode.Code == SharpDX.DXGI.ResultCode.InvalidCall.Result.Code)
+                    {
+                        // These specifically mean the capture device/context is no longer
+                        // valid (display sleep/wake, resolution or monitor topology change).
+                        // Surface a typed exception so the reader recreates the duplicator
+                        // straight away instead of retrying against a dead device.
+                        Debug.WriteLine($"DXGI context lost in RetrieveFrame: {ex.Message}");
+                        throw new DesktopDuplicationException("DXGI capture context was lost.", ex);
+                    }
+
+                    Debug.WriteLine($"SharpDX error in RetrieveFrame: {ex.Message}");
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Unexpected error in RetrieveFrame: {ex.Message}");
+                    return false;
+                }
+                finally
+                {
+                    // Always release frame and dispose resource
+                    try
+                    {
+                        _outputDuplication?.ReleaseFrame();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error releasing frame: {ex.Message}");
+                    }
+
+                    desktopResource?.Dispose();
+                }
             }
-
-
-            using (var tempTexture = desktopResource.QueryInterface<Texture2D>())
+            catch (Exception ex)
             {
-                if (_device == null) throw new Exception("_device is null");
-                if (_device.ImmediateContext == null) throw new Exception("_device.ImmediateContext is null");
-
-                _device.ImmediateContext.CopySubresourceRegion(tempTexture, 0, null, _smallerTexture, 0);
+                Debug.WriteLine($"Critical error in RetrieveFrame: {ex.Message}");
+                return false;
             }
-            _outputDuplication.ReleaseFrame();
-
-            // Generates the mipmap of the screen
-            _device.ImmediateContext.GenerateMips(_smallerTextureView);
-
-            // Copy the mipmap 1 of smallerTexture (size/2) to the staging texture
-            _device.ImmediateContext.CopySubresourceRegion(_smallerTexture, mipMapLevel, null, _stagingTexture, 0);
-
-            desktopResource.Dispose(); //perf?
-            return true;
         }
 
         private Bitmap ProcessFrame(Bitmap reusableImage)
         {
-            // Get the desktop capture texture
-            var mapSource = _device.ImmediateContext.MapSubresource(_stagingTexture, 0, MapMode.Read, MapFlags.None);
-
-            Bitmap image;
-            var width = _outputDescription.DesktopBounds.GetWidth() / scalingFactor;
-            var height = _outputDescription.DesktopBounds.GetHeight() / scalingFactor;
-
-            if (reusableImage != null && reusableImage.Width == width && reusableImage.Height == height)
+            if (_device == null || _device.ImmediateContext == null || _stagingTexture == null ||
+                _stagingTexture.IsDisposed || _device.IsDisposed)
             {
-                image = reusableImage;
-            }
-            else
-            {
-                image = new Bitmap(width, height, PixelFormat.Format32bppRgb);
+                return null;
             }
 
-            var boundsRect = new System.Drawing.Rectangle(0, 0, width, height);
-
-            // Copy pixels from screen capture Texture to GDI bitmap
-            var mapDest = image.LockBits(boundsRect, ImageLockMode.WriteOnly, image.PixelFormat);
-            var sourcePtr = mapSource.DataPointer;
-            var destPtr = mapDest.Scan0;
-
-            if (mapSource.RowPitch == mapDest.Stride)
+            try
             {
-                //fast copy
-                Utilities.CopyMemory(destPtr, sourcePtr, height * mapDest.Stride);
-            }
-            else
-            {
-                //safe copy
-                for (int y = 0; y < height; y++)
+                // Get the desktop capture texture
+                var mapSource = _device.ImmediateContext.MapSubresource(_stagingTexture, 0, MapMode.Read, MapFlags.None);
+
+                Bitmap image;
+                var width = _outputDescription.DesktopBounds.GetWidth() / scalingFactor;
+                var height = _outputDescription.DesktopBounds.GetHeight() / scalingFactor;
+
+                if (reusableImage != null && reusableImage.Width == width && reusableImage.Height == height)
                 {
-                    // Copy a single line 
-                    Utilities.CopyMemory(destPtr, sourcePtr, width * 4);
-
-                    // Advance pointers
-                    sourcePtr = IntPtr.Add(sourcePtr, mapSource.RowPitch);
-                    destPtr = IntPtr.Add(destPtr, mapDest.Stride);
+                    image = reusableImage;
                 }
+                else
+                {
+                    image = new Bitmap(width, height, PixelFormat.Format32bppRgb);
+                }
+
+                var boundsRect = new System.Drawing.Rectangle(0, 0, width, height);
+
+                try
+                {
+                    // Copy pixels from screen capture Texture to GDI bitmap
+                    var mapDest = image.LockBits(boundsRect, ImageLockMode.WriteOnly, image.PixelFormat);
+                    var sourcePtr = mapSource.DataPointer;
+                    var destPtr = mapDest.Scan0;
+
+                    try
+                    {
+                        if (mapSource.RowPitch == mapDest.Stride)
+                        {
+                            //fast copy
+                            Utilities.CopyMemory(destPtr, sourcePtr, height * mapDest.Stride);
+                        }
+                        else
+                        {
+                            //safe copy
+                            for (int y = 0; y < height; y++)
+                            {
+                                // Copy a single line 
+                                Utilities.CopyMemory(destPtr, sourcePtr, width * 4);
+
+                                // Advance pointers
+                                sourcePtr = IntPtr.Add(sourcePtr, mapSource.RowPitch);
+                                destPtr = IntPtr.Add(destPtr, mapDest.Stride);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        // Always unlock bits
+                        image.UnlockBits(mapDest);
+                    }
+                }
+                finally
+                {
+                    // Always unmap
+                    _device.ImmediateContext.UnmapSubresource(_stagingTexture, 0);
+                }
+
+                return image;
             }
-
-            // Release source and dest locks
-            image.UnlockBits(mapDest);
-            _device.ImmediateContext.UnmapSubresource(_stagingTexture, 0);
-            return image;
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in ProcessFrame: {ex.Message}");
+                return null;
+            }
         }
-
 
         public bool IsDisposed { get; private set; }
 
@@ -227,11 +334,24 @@ namespace Ambilight.DesktopDuplication
 
         public void Dispose()
         {
-            IsDisposed = true;
-            _stagingTexture?.Dispose();
-            _outputDuplication?.Dispose();
-            _device?.Dispose();
-            _desktopFrameLogger?.Dispose();
+            if (!IsDisposed)
+            {
+                IsDisposed = true;
+
+                try
+                {
+                    _smallerTextureView?.Dispose();
+                    _smallerTexture?.Dispose();
+                    _stagingTexture?.Dispose();
+                    _outputDuplication?.Dispose();
+                    _device?.Dispose();
+                    _desktopFrameLogger?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error during Dispose: {ex.Message}");
+                }
+            }
         }
     }
 }

@@ -9,7 +9,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>Ambilight</RootNamespace>
     <AssemblyName>Ambilight</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <IsWebBootstrapper>false</IsWebBootstrapper>
@@ -46,6 +46,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -55,6 +56,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup>
     <StartupObject>Ambilight.Program</StartupObject>
@@ -63,13 +65,18 @@
     <TargetZone>LocalIntranet</TargetZone>
   </PropertyGroup>
   <PropertyGroup>
-    <GenerateManifests>true</GenerateManifests>
+    <!--
+      ClickOnce manifest generation is off: with it on, Properties\app.manifest was consumed
+      as the ClickOnce source manifest and NOT embedded in the exe, which silently dropped the
+      <msix> package-identity element that Windows Dynamic Lighting background control needs.
+    -->
+    <GenerateManifests>false</GenerateManifests>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests>true</SignManifests>
+    <SignManifests>false</SignManifests>
   </PropertyGroup>
   <PropertyGroup>
     <ManifestCertificateThumbprint>50AB1BEC0F68DF70AC56EEC4C1F0F011F932A595</ManifestCertificateThumbprint>
@@ -101,6 +108,35 @@
     <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="MoreLinq, Version=3.3.2.0, Culture=neutral, PublicKeyToken=384d532d7e88985d, processorArchitecture=MSIL">
       <HintPath>..\packages\morelinq.3.3.2\lib\net451\MoreLinq.dll</HintPath>
+    </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <!--
+      Windows Dynamic Lighting (Windows.Devices.Lights.LampArray). "Windows" is the WinRT
+      metadata-only reference from the installed Windows SDK (compile time only, not copied to
+      the output; WinRT activation is provided by the OS at runtime). If the SDK is updated and
+      this stops resolving, point the HintPath at the new UnionMetadata\<version>\Windows.winmd.
+    -->
+    <Reference Include="Windows">
+      <HintPath>C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.28000.0\Windows.winmd</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.WindowsRuntime" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Memory, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Memory.4.6.3\lib\net462\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors, Version=4.1.6.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Numerics.Vectors.4.6.1\lib\net462\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="Wpf.Ui, Version=4.3.0.0, Culture=neutral, PublicKeyToken=11f9f5cc97b3ffd6, processorArchitecture=MSIL">
+      <HintPath>..\packages\WPF-UI.4.3.0\lib\net462\Wpf.Ui.dll</HintPath>
+    </Reference>
+    <Reference Include="Wpf.Ui.Abstractions, Version=4.3.0.0, Culture=neutral, PublicKeyToken=11f9f5cc97b3ffd6, processorArchitecture=MSIL">
+      <HintPath>..\packages\WPF-UI.Abstractions.4.3.0\lib\net462\Wpf.Ui.Abstractions.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
@@ -136,8 +172,8 @@
     <Reference Include="System.Reactive, Version=4.4.0.0, Culture=neutral, PublicKeyToken=94bc3704cddfc263, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Reactive.4.4.1\lib\net46\System.Reactive.dll</HintPath>
     </Reference>
-    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=4.0.6.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.4.7.1\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
     </Reference>
     <Reference Include="System.Runtime.InteropServices.RuntimeInformation, Version=4.0.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Runtime.InteropServices.RuntimeInformation.4.3.0\lib\net45\System.Runtime.InteropServices.RuntimeInformation.dll</HintPath>
@@ -168,23 +204,14 @@
     <Compile Include="DesktopDuplication\DesktopDuplicatorReader.cs" />
     <Compile Include="DesktopDuplication\IDesktopDuplicatorReader.cs" />
     <Compile Include="Extensions\RawRectangleExtensions.cs" />
-    <Compile Include="GUI\Monitor.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="GUI\Monitor.Designer.cs">
-      <DependentUpon>Monitor.cs</DependentUpon>
-    </Compile>
+    <Compile Include="GUI\ColorWheel.cs" />
+    <Compile Include="GUI\DarkContextMenuRenderer.cs" />
     <Compile Include="GUI\TraySettings.cs" />
-    <Compile Include="GUI\KeyboardSizeControl.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="GUI\KeyboardSizeControl.Designer.cs">
-      <DependentUpon>KeyboardSizeControl.cs</DependentUpon>
-    </Compile>
     <Compile Include="Logic\HeadsetLogic.cs" />
     <Compile Include="Logic\IDeviceLogic.cs" />
     <Compile Include="Logic\KeyboardLogic.cs" />
     <Compile Include="Logic\KeypadLogic.cs" />
+    <Compile Include="Logic\LampArrayLogic.cs" />
     <Compile Include="Logic\LinkLogic.cs" />
     <Compile Include="Logic\LogicManager.cs" />
     <Compile Include="Logic\MouseLogic.cs" />
@@ -196,13 +223,12 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
-    <Compile Include="GUI\SaturationControl.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="GUI\SaturationControl.Designer.cs">
-      <DependentUpon>SaturationControl.cs</DependentUpon>
+    <Compile Include="GUI\SettingsWindow.xaml.cs">
+      <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Util\Extensions.cs" />
+    <Compile Include="Util\ColorUtil.cs" />
+    <Compile Include="Util\FastBitmap.cs" />
     <Compile Include="Util\FpsLogger.cs" />
     <Compile Include="Util\ImageManipulation.cs" />
     <Compile Include="Util\ScreenInterrogatory.cs" />
@@ -211,7 +237,9 @@
     <None Include="App.config">
       <SubType>Designer</SubType>
     </None>
-    <None Include="NLog.config" />
+    <None Include="NLog.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
     <None Include="Properties\app.manifest" />
     <None Include="Properties\Settings.settings">
@@ -241,15 +269,10 @@
     <Content Include="NLog.xsd" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="GUI\KeyboardSizeControl.resx">
-      <DependentUpon>KeyboardSizeControl.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="GUI\Monitor.resx">
-      <DependentUpon>Monitor.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="GUI\SaturationControl.resx">
-      <DependentUpon>SaturationControl.cs</DependentUpon>
-    </EmbeddedResource>
+    <Page Include="GUI\SettingsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="IWshRuntimeLibrary">

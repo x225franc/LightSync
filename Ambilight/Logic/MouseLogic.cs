@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 using Ambilight.GUI;
+using Ambilight.Util;
 using Colore;
 using Colore.Effects.Mouse;
 using ColoreColor = Colore.Data.Color;
@@ -30,10 +31,19 @@ namespace Ambilight.Logic
         {
             Bitmap mapMouse = ImageManipulation.ResizeImage(newImage, MouseConstants.MaxColumns,
                     MouseConstants.MaxRows);
-            mapMouse = ImageManipulation.ApplySaturation(mapMouse, _settings.Saturation);            
-            ApplyPictureToGrid(mapMouse);
+            Bitmap saturatedMap = ImageManipulation.ApplySaturation(mapMouse, _settings.Saturation);
+
+            // Dispose the resized map if saturation created a new bitmap
+            if (saturatedMap != mapMouse && mapMouse != null)
+            {
+                mapMouse.Dispose();
+            }
+
+            ApplyPictureToGrid(saturatedMap);
             _chroma.Mouse.SetGridAsync(_mouseGrid);
-            mapMouse.Dispose();
+
+            // Clean up
+            saturatedMap?.Dispose();
         }
 
         /// <summary>
@@ -44,20 +54,22 @@ namespace Ambilight.Logic
         /// <returns>EffectGrid</returns>
         private void ApplyPictureToGrid(Bitmap mapMouse)
         {
-
-            for (var r = 0; r < MouseConstants.MaxRows; r++)
+            using (var fast = new FastBitmap(mapMouse))
             {
-                for (var c = 0; c < MouseConstants.MaxColumns; c++)
+                for (var r = 0; r < MouseConstants.MaxRows; r++)
                 {
-                    Color color;
+                    for (var c = 0; c < MouseConstants.MaxColumns; c++)
+                    {
+                        Color color;
 
-                    if (_settings.AmbiModeEnabled)
-                        color = mapMouse.GetPixel(6, 8);
-                    else
-                        color = mapMouse.GetPixel(c, r);
+                        if (_settings.AmbiModeEnabled)
+                            color = fast.GetPixel(6, 8);
+                        else
+                            color = fast.GetPixel(c, r);
 
 
-                    _mouseGrid[r, c] = new ColoreColor((byte)color.R, (byte)color.G, (byte)color.B);
+                        _mouseGrid[r, c] = new ColoreColor((byte)color.R, (byte)color.G, (byte)color.B);
+                    }
                 }
             }
         }

@@ -199,5 +199,77 @@ namespace Ambilight.Properties {
                 this["monitor"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool laptopKeyboardEnabled {
+            get {
+                return ((bool)(this["laptopKeyboardEnabled"]));
+            }
+            set {
+                this["laptopKeyboardEnabled"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("100")]
+        public int laptopBrightness {
+            get {
+                return ((int)(this["laptopBrightness"]));
+            }
+            set {
+                this["laptopBrightness"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int laptopEffect {
+            get {
+                return ((int)(this["laptopEffect"]));
+            }
+            set {
+                this["laptopEffect"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("50")]
+        public int laptopEffectSpeed {
+            get {
+                return ((int)(this["laptopEffectSpeed"]));
+            }
+            set {
+                this["laptopEffectSpeed"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool laptopEffectReverse {
+            get {
+                return ((bool)(this["laptopEffectReverse"]));
+            }
+            set {
+                this["laptopEffectReverse"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("#FF2D2D")]
+        public string laptopColor {
+            get {
+                return ((string)(this["laptopColor"]));
+            }
+            set {
+                this["laptopColor"] = value;
+            }
+        }
     }
 }

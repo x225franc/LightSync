@@ -1,6 +1,17 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <assemblyIdentity version="1.0.0.0" name="MyApplication.app" />
+  <!--
+    Ties this exe to the sparse package registered by Package\Install-LightingProvider.ps1, which
+    gives it package identity and the com.microsoft.windows.lighting extension that Windows
+    Dynamic Lighting requires before it lists the app under "Background light control". The
+    exe still runs normally (without identity) when that package is not registered.
+    publisher/packageName must match Package\AppxManifest.xml exactly.
+  -->
+  <msix xmlns="urn:schemas-microsoft-com:msix.v1"
+        publisher="CN=RazerAmbilightDev"
+        packageName="RazerAmbilight.Lighting"
+        applicationId="App" />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
