@@ -26,6 +26,9 @@ namespace Ambilight
         // including Chroma Link/Chroma Connect) at unpredictable times.
         private static Logic.LogicManager _logicManager;
 
+        /// <summary>Reached from the settings window (e.g. for the group color test) - null until Main() has run.</summary>
+        public static Logic.LogicManager LogicManager { get { return _logicManager; } }
+
         /// <summary>
         /// Entry point. Checks for updates and initializes the software
         /// </summary>

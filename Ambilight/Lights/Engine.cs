@@ -20,6 +20,12 @@ namespace Ambilight.Lights
         public string Model, DeviceName, Error;
         public volatile BulbStatus Status = BulbStatus.Searching;
         public volatile int CurrentRgb;
+        /// <summary>Set by the screen canvas feed each frame for a device positioned on it, 0xRRGGBB; -1 = no frame sampled yet.
+        /// Bypasses Razer Chroma Connect entirely - read only when <see cref="Config"/>.UseScreenPosition is on.</summary>
+        internal volatile int ScreenRgb = -1;
+        /// <summary>Govee only, canvas mode: one color per real segment, sampled left-to-right across the device's
+        /// canvas rectangle - a true gradient read straight off the screen. Null/1 element = use ScreenRgb instead.</summary>
+        internal volatile int[] ScreenColors;
 
         public DeviceKind Kind { get { return Config.Kind == Kinds.Govee ? DeviceKind.Govee : DeviceKind.Yeelight; } }
 
@@ -116,7 +122,7 @@ namespace Ambilight.Lights
 
             lock (_config.Bulbs)
                 foreach (var b in _config.Bulbs)
-                    _bulbs.Add(new BulbState { Config = b, Status = b.Group > 0 ? BulbStatus.Searching : BulbStatus.NotControlled, BrightnessDirty = true });
+                    _bulbs.Add(new BulbState { Config = b, Status = b.Controlled ? BulbStatus.Searching : BulbStatus.NotControlled, BrightnessDirty = true });
 
             _loop = new Thread(Loop) { IsBackground = true, Name = "Light color loop" };
             _scanner = new Thread(ScanLoop) { IsBackground = true, Name = "Light discovery" };
@@ -152,6 +158,9 @@ namespace Ambilight.Lights
             }
         }
         public bool ChromaLive { get { return _razer.Live; } }
+
+        /// <summary>Diagnostic only: the five raw Broadcast colors (CL1..CL5) as 0xRRGGBB, straight from Razer.</summary>
+        public int[] RawZoneColors { get { return new[] { _razer.GetRgb(0), _razer.GetRgb(1), _razer.GetRgb(2), _razer.GetRgb(3), _razer.GetRgb(4) }; } }
 
         public void Rescan() { _scanNow.Set(); }
 
@@ -222,11 +231,25 @@ namespace Ambilight.Lights
         public void SetGroup(BulbState bulb, int group)
         {
             bulb.Config.Group = Math.Max(0, Math.Min(bulb.Kind == DeviceKind.Govee ? 6 : 5, group));
-            if (bulb.Config.Group == 0) bulb.Status = BulbStatus.NotControlled;
+            ApplyControlledChange(bulb);
+            ScheduleSave();
+        }
+
+        /// <summary>Per-light on/off toggle: turning it off releases the device right away but keeps its Chroma
+        /// group, so turning it back on resumes on the same group instead of it having to be picked again.</summary>
+        public void SetEnabled(BulbState bulb, bool enabled)
+        {
+            bulb.Config.Enabled = enabled;
+            ApplyControlledChange(bulb);
+            ScheduleSave();
+        }
+
+        void ApplyControlledChange(BulbState bulb)
+        {
+            if (!bulb.Config.Controlled) bulb.Status = BulbStatus.NotControlled;
             else if (bulb.Status == BulbStatus.NotControlled) { bulb.Status = bulb.Ip == null ? BulbStatus.Searching : BulbStatus.Connecting; bulb.NextAttempt = DateTime.MinValue; }
             bulb.LastSentRgb = -1;
             bulb.GoveeReady = false; bulb.GoveeInitStep = 0;
-            ScheduleSave();
         }
 
         public void SetBrightness(BulbState bulb, int percent)
@@ -235,6 +258,34 @@ namespace Ambilight.Lights
             bulb.BrightnessDirty = true;
             ScheduleSave();
         }
+
+        /// <summary>Switches a device between following its Chroma group and following a rectangle on the lights canvas.</summary>
+        public void SetUseScreenPosition(BulbState bulb, bool value)
+        {
+            bulb.Config.UseScreenPosition = value;
+            bulb.ScreenRgb = -1;
+            ApplyControlledChange(bulb);
+            ScheduleSave();
+        }
+
+        /// <summary>Moves/resizes a device's rectangle on the lights canvas (fractions of the screen, 0-1).</summary>
+        public void SetScreenPosition(BulbState bulb, double x, double y, double w, double h)
+        {
+            w = Math.Max(0.02, Math.Min(1, w));
+            h = Math.Max(0.02, Math.Min(1, h));
+            bulb.Config.PosX = Math.Max(0, Math.Min(1 - w, x));
+            bulb.Config.PosY = Math.Max(0, Math.Min(1 - h, y));
+            bulb.Config.PosW = w;
+            bulb.Config.PosH = h;
+            ScheduleSave();
+        }
+
+        /// <summary>Called once per captured frame, for a device positioned on the lights canvas, with the dominant
+        /// color of its rectangle - bypasses Razer Chroma Connect entirely (see <see cref="BulbState.ScreenRgb"/>).</summary>
+        public void SetScreenColor(BulbState bulb, int rgb) { bulb.ScreenRgb = rgb; }
+
+        /// <summary>Same, but one color per real Govee segment (a true gradient sampled straight off the screen).</summary>
+        public void SetScreenColors(BulbState bulb, int[] rgbs) { bulb.ScreenColors = rgbs; bulb.ScreenRgb = rgbs.Length > 0 ? rgbs[0] : -1; }
 
         public void SetName(BulbState bulb, string name)
         {
@@ -304,7 +355,7 @@ namespace Ambilight.Lights
                 Breathe(v => _govee.Brightness(b.Ip, b.LocalIp, v), 90);      // Govee devices cope with ~11 commands a second
 
                 // Controlled devices go back to the Chroma color on their own; the others get their old state back.
-                if (before != null && (b.Config.Group == 0 || !_config.ControlEnabled))
+                if (before != null && (!b.Config.Controlled || !_config.ControlEnabled))
                 {
                     _govee.Brightness(b.Ip, b.LocalIp, before.Brightness);
                     _govee.Color(b.Ip, b.LocalIp, before.R, before.G, before.B, before.Kelvin);
@@ -369,7 +420,7 @@ namespace Ambilight.Lights
         bool AnythingMissing()
         {
             foreach (var b in Bulbs)
-                if (b.Config.Group > 0 && b.Status != BulbStatus.Connected) return true;
+                if (b.Config.Controlled && b.Status != BulbStatus.Connected) return true;
             return false;
         }
 
@@ -382,7 +433,8 @@ namespace Ambilight.Lights
 
         BulbState AddNew(string id, string kind)
         {
-            var cfg = new BulbConfig { Id = id, Kind = kind, Group = 0, Brightness = 100 };
+            // Starts off (the toggle) with a sensible group already picked, ready for one click.
+            var cfg = new BulbConfig { Id = id, Kind = kind, Group = 1, Enabled = false, Brightness = 100 };
             lock (_config.Bulbs) _config.Bulbs.Add(cfg);
             var state = new BulbState { Config = cfg, Status = BulbStatus.NotControlled, BrightnessDirty = true };
             lock (_bulbs) _bulbs.Add(state);
@@ -472,23 +524,17 @@ namespace Ambilight.Lights
             bool enabled = _config.ControlEnabled;
             foreach (var b in Bulbs)
             {
-                int group = b.Config.Group;
-                if (!enabled)
+                bool controlled = b.Config.Controlled;
+                if (!enabled || !controlled)
                 {
                     if (b.Link != null) DropLink(b);
                     ReleaseGovee(b);
-                    b.Status = group == 0 ? BulbStatus.NotControlled : BulbStatus.Paused;
-                    continue;
-                }
-                if (group == 0)
-                {
-                    if (b.Link != null) DropLink(b);
-                    ReleaseGovee(b);
-                    b.Status = BulbStatus.NotControlled;
+                    b.Status = controlled ? BulbStatus.Paused : BulbStatus.NotControlled;
                     continue;
                 }
                 if (b.Ip == null) { b.Status = BulbStatus.Searching; continue; }
 
+                int group = b.Config.Group;
                 if (b.Kind == DeviceKind.Govee) TickGovee(b, group, now);
                 else TickYeelight(b, group, now);
             }
@@ -521,8 +567,17 @@ namespace Ambilight.Lights
 
             if (b.BrightnessDirty) { b.BrightnessDirty = false; b.LastSentRgb = -1; }    // the new setting is applied with the next color
 
-            if (_razer.Events == 0) return;
-            int rgb = ZoneRgb(Math.Min(group, 5) - 1);
+            int rgb;
+            if (b.Config.UseScreenPosition)
+            {
+                if (b.ScreenRgb < 0) return;      // no frame sampled yet
+                rgb = b.ScreenRgb;
+            }
+            else
+            {
+                if (_razer.Events == 0) return;
+                rgb = ZoneRgb(Math.Min(group, 5) - 1);
+            }
             b.CurrentRgb = rgb;
 
             // A bulb only takes hue and saturation from a color and keeps its own brightness, and it refuses pure black.
@@ -646,10 +701,23 @@ namespace Ambilight.Lights
                 _govee.Brightness(b.Ip, b.LocalIp, b.Config.Brightness);
             }
 
-            if (_razer.Events == 0) return;
             double sinceMs = (now - b.LastSentAt).TotalMilliseconds;
             bool due = sinceMs >= 1000.0 / GoveeFps;
-            if (group == SpreadGroup)
+            if (b.Config.UseScreenPosition)
+            {
+                if (b.ScreenRgb < 0) return;      // no frame sampled yet
+                var colors = b.ScreenColors;
+                b.CurrentRgb = b.ScreenRgb;
+                if (due)
+                {
+                    bool sent = colors != null && colors.Length > 1
+                        ? _govee.SegmentColors(b.Ip, b.LocalIp, colors)       // a true gradient sampled off the screen
+                        : _govee.Segments(b.Ip, b.LocalIp, b.ScreenRgb, SegmentsOf(b));
+                    if (sent) { b.LastSentRgb = b.ScreenRgb; b.LastSentAt = now; b.LastStreamRgb = b.ScreenRgb; }
+                }
+            }
+            else if (_razer.Events == 0) return;
+            else if (group == SpreadGroup)
             {
                 // The four Chroma groups as a gradient along the device (first segment = Group 1 ... last = Group 4).
                 int[] seg = SpreadColors(SegmentsOf(b));
@@ -739,7 +807,7 @@ namespace Ambilight.Lights
             var link = b.Link;
             b.Link = null;
             if (link != null) Task.Run(() => { try { link.Dispose(); } catch { } });    // its cleanup waits a little: not on the color loop
-            if (b.Config.Group > 0 && b.Status == BulbStatus.Connected) b.Status = BulbStatus.Connecting;
+            if (b.Config.Controlled && b.Status == BulbStatus.Connected) b.Status = BulbStatus.Connecting;
             b.LastSentRgb = -1;
             b.YeelightOff = false;
             b.YeelightFading = false;

@@ -49,7 +49,7 @@ namespace Ambilight.GUI
             if (RazerPage == null || SettingsPage == null)
                 return;     // fires once while the window is being built
 
-            var pages = new FrameworkElement[] { RazerPage, LightsPage, LaptopPage, CapturePage, SettingsPage };
+            var pages = new FrameworkElement[] { RazerPage, LightsPage, CanvasPage, LaptopPage, CapturePage, SettingsPage };
             for (int i = 0; i < pages.Length; i++)
                 pages[i].Visibility = i == NavList.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -92,11 +92,17 @@ namespace Ambilight.GUI
                 ? "Searching for devices on all network adapters..."
                 : (_engine.LastScan == default(DateTime) ? "Not searched yet." : "Last search: " + _engine.LastScan.ToString("HH:mm:ss"));
 
+            bool testing = Program.LogicManager != null && Program.LogicManager.ColorTestRunning;
+            ColorTestButton.Content = testing ? "Stop the test" : "Start the test";
+            ColorTestStatusText.Text = testing ? "Running - see the log file for which zone is on now." : "";
+
             FirewallBanner.Visibility = _firewallOk ? Visibility.Collapsed : Visibility.Visible;
             LightConnectBanner.Visibility = ExternalApps.IsRunning(ExternalApps.LightConnect) ? Visibility.Visible : Visibility.Collapsed;
             YeelightBanner.Visibility = ExternalApps.IsRunning(ExternalApps.YeelightOfficial) ? Visibility.Visible : Visibility.Collapsed;
             GoveeBanner.Visibility = ExternalApps.IsRunning(ExternalApps.GoveeDesktop) ? Visibility.Visible : Visibility.Collapsed;
             RestoreCard.Visibility = _lightsConfig.SavedRunValues.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+            SyncCanvas();       // GUI/SettingsWindow.Canvas.cs
         }
 
         private void ControlToggle_Changed(object sender, RoutedEventArgs e)
@@ -107,6 +113,14 @@ namespace Ambilight.GUI
         }
 
         private void RescanButton_Click(object sender, RoutedEventArgs e) { if (_engine != null) _engine.Rescan(); }
+
+        private void ColorTestButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Program.LogicManager == null) return;
+            if (Program.LogicManager.ColorTestRunning) Program.LogicManager.StopColorTest();
+            else Program.LogicManager.StartColorTest();
+            RefreshLights();
+        }
 
         private void AllowFirewallButton_Click(object sender, RoutedEventArgs e)
         {

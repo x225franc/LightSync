@@ -49,6 +49,14 @@ namespace Ambilight.GUI
         private Icon _trayIcon;
         private Control _uiMarshal;
         private volatile bool _rebuildPending;
+        private DateTime _lastRebuildAt = DateTime.MinValue;
+        // Resume, the lock screen's unlock and a display change can each fire this separately for the very same
+        // wake-up (the unlock in particular can land well over 3 s after resume - however long the user takes to
+        // type their password), so a short "one trigger at a time" guard is not enough: without this, each one
+        // rebuilds the icon on its own, and every extra rebuild is another chance to leave a stale ghost behind in
+        // Windows' own tray icon cache. One rebuild is enough to fix the stale GDI/DWM resources; a second or third
+        // for the same wake-up only adds more ghosts.
+        private static readonly TimeSpan RebuildCooldown = TimeSpan.FromSeconds(20);
 
         private readonly Logger logger = LogManager.GetCurrentClassLogger();
 
@@ -217,6 +225,8 @@ namespace Ambilight.GUI
         {
             if (_uiMarshal == null || !_uiMarshal.IsHandleCreated || _rebuildPending)
                 return;
+            if (DateTime.UtcNow - _lastRebuildAt < RebuildCooldown)
+                return;     // already rebuilt for this wake-up - a later resume/unlock/display event needs no second one
 
             _rebuildPending = true;
             _uiMarshal.BeginInvoke(new Action(() =>
@@ -240,6 +250,7 @@ namespace Ambilight.GUI
                 if (_trayMenu != null && _trayMenu.Visible)
                     return;
 
+                _lastRebuildAt = DateTime.UtcNow;
                 logger.Debug("Rebuilding tray icon and menu.");
 
                 var oldIcon = notifyIcon;

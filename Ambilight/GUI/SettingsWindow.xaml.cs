@@ -49,6 +49,7 @@ namespace Ambilight.GUI
 
             InitializeComponent();
             InitLights();
+            InitCanvas();
 
             SetupCommandBox.Text = SetupCommand;
             GoveeFixCommandBox.Text = GoveeFixCommand;

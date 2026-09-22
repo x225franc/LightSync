@@ -29,7 +29,7 @@ namespace Ambilight.Logic
         /// <param name="newImage">ScreenShot</param>
         public void Process(Bitmap newImage)
         {
-            Bitmap mapMousePad = ImageManipulation.ResizeImage(newImage, 7, 6);
+            Bitmap mapMousePad = Lights.RazerCanvasFeed.Resize(newImage, "Mousepad", 7, 6, _settings.UltrawideModeEnabled);
             Bitmap saturatedMap = ImageManipulation.ApplySaturation(mapMousePad, _settings.Saturation, _settings.DeviceBrightness / 100f);
 
             // Dispose the resized map if saturation created a new bitmap

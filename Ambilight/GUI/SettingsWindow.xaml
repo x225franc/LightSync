@@ -45,6 +45,12 @@
                         <TextBlock Text="Lights" VerticalAlignment="Center" />
                     </StackPanel>
                 </ListBoxItem>
+                <ListBoxItem AutomationProperties.AutomationId="NavCanvas">
+                    <StackPanel Orientation="Horizontal" Margin="4,7">
+                        <ui:SymbolIcon Symbol="Desktop24" Margin="0,0,12,0" />
+                        <TextBlock Text="Canvas" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
                 <ListBoxItem AutomationProperties.AutomationId="NavLaptop">
                     <StackPanel Orientation="Horizontal" Margin="4,7">
                         <ui:SymbolIcon Symbol="DesktopKeyboard24" Margin="0,0,12,0" />
@@ -204,6 +210,20 @@
                     </StackPanel>
                 </Border>
 
+                <ui:CardExpander Margin="0,4,0,4" Header="Test which physical light is which group" IsExpanded="False" ContentPadding="16">
+                    <ui:CardExpander.Icon>
+                        <ui:SymbolIcon Symbol="Lightbulb24" />
+                    </ui:CardExpander.Icon>
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="Lights up Group 1, then Group 2 to Group 4, one at a time - everything else goes dark while a group is shown, so it is unambiguous which bulb belongs to which group. Needs Razer Chroma Connect to be receiving colors." />
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Button x:Name="ColorTestButton" Content="Start the test" Click="ColorTestButton_Click" />
+                            <TextBlock x:Name="ColorTestStatusText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.8" />
+                        </StackPanel>
+                    </StackPanel>
+                </ui:CardExpander>
+
                 <!-- Bulbs -->
                 <TextBlock Text="Devices" FontSize="14" FontWeight="SemiBold" Margin="0,16,0,8" />
                 <TextBlock x:Name="NoBulbsText" Visibility="Collapsed" TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,8"
@@ -246,9 +266,13 @@
                                                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="{Binding Subtitle}" Opacity="0.7" FontSize="12" Margin="0,1,0,0" />
                                             </StackPanel>
-                                            <ui:Button Grid.Column="1" Content="Preview" VerticalAlignment="Top" Margin="8,0,0,0"
-                                                       Command="{Binding PreviewCommand}"
-                                                       ToolTip="Blinks this bulb white so you can see which one it is" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                                <ui:ToggleSwitch IsChecked="{Binding Enabled, Mode=TwoWay}" Margin="0,0,8,0"
+                                                                 ToolTip="Turns this light on or off (its Chroma group is kept while off)" />
+                                                <ui:Button Content="Preview"
+                                                           Command="{Binding PreviewCommand}"
+                                                           ToolTip="Blinks this bulb white so you can see which one it is" />
+                                            </StackPanel>
                                         </Grid>
                                         <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
                                             <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center" Fill="{Binding StatusBrush}" />
@@ -272,20 +296,16 @@
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Text="Chroma group" VerticalAlignment="Center" />
                                             <ComboBox Grid.Column="1" HorizontalAlignment="Left" Width="190"
-                                                      Visibility="{Binding YeelightChoices}"
-                                                      SelectedIndex="{Binding Group, Mode=TwoWay}">
-                                                <ComboBoxItem Content="Off (not controlled)" />
-                                                <ComboBoxItem Content="Global" />
+                                                      Visibility="{Binding YeelightChoices}" IsEnabled="{Binding GroupEnabled}"
+                                                      SelectedIndex="{Binding GroupIndex, Mode=TwoWay}">
                                                 <ComboBoxItem Content="Group 1" />
                                                 <ComboBoxItem Content="Group 2" />
                                                 <ComboBoxItem Content="Group 3" />
                                                 <ComboBoxItem Content="Group 4" />
                                             </ComboBox>
                                             <ComboBox Grid.Column="1" HorizontalAlignment="Left" Width="230"
-                                                      Visibility="{Binding GoveeChoices}"
-                                                      SelectedIndex="{Binding Group, Mode=TwoWay}">
-                                                <ComboBoxItem Content="Off (not controlled)" />
-                                                <ComboBoxItem Content="Global" />
+                                                      Visibility="{Binding GoveeChoices}" IsEnabled="{Binding GroupEnabled}"
+                                                      SelectedIndex="{Binding GroupIndex, Mode=TwoWay}">
                                                 <ComboBoxItem Content="Group 1" />
                                                 <ComboBoxItem Content="Group 2" />
                                                 <ComboBoxItem Content="Group 3" />
@@ -294,7 +314,18 @@
                                             </ComboBox>
                                         </Grid>
 
-                                        <Grid>
+                                        <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="112" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Screen canvas" VerticalAlignment="Center" />
+                                            <ui:ToggleSwitch Grid.Column="1" HorizontalAlignment="Left"
+                                                              IsChecked="{Binding UseScreenPosition, Mode=TwoWay}"
+                                                              ToolTip="Instead of a Chroma group, follow a rectangle placed on the canvas below - no 4-zone limit, any position." />
+                                        </Grid>
+
+                                        <Grid IsEnabled="{Binding Enabled}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="112" />
                                                 <ColumnDefinition Width="*" />
@@ -361,6 +392,56 @@
                 </ui:CardExpander>
 
                 </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+                <ScrollViewer x:Name="CanvasPage" Visibility="Collapsed" Margin="6,0,4,8" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,18,0">
+
+                <TextBlock Text="Screen canvas" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,8" />
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="Drag a device to where it really sits around your screen, and drag its bottom-right corner to resize the area it should reflect. Each box is shown as a grid of small cells matching how many LEDs that device really has. Lights are turned on here with their own 'Screen canvas' switch on the Lights page; Razer devices are turned on below. This bypasses Razer Chroma Connect entirely for lights, so it keeps working even without Synapse running." />
+
+                <Grid x:Name="CanvasScaleHost" HorizontalAlignment="Stretch" SizeChanged="CanvasScaleHost_SizeChanged">
+                    <Border x:Name="CanvasBorder" Background="#FF101010" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4"
+                            Width="480" Height="270" HorizontalAlignment="Left" VerticalAlignment="Top">
+                        <Canvas x:Name="PositionCanvas" ClipToBounds="True" />
+                    </Border>
+                </Grid>
+                <TextBlock x:Name="CanvasHintText" Margin="0,8,0,16" Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                           Text="Nothing is on the canvas yet." />
+
+                <TextBlock Text="Razer devices on the canvas" FontSize="14" FontWeight="SemiBold" Margin="0,4,0,8" />
+                <ui:CardControl Margin="0,0,0,4" Header="Keyboard">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Keyboard24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="CanvasKeyboardToggle" Click="CanvasDeviceToggle_Click" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Mouse">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Cursor24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="CanvasMouseToggle" Click="CanvasDeviceToggle_Click" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Mousepad">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Grid24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="CanvasMousepadToggle" Click="CanvasDeviceToggle_Click" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Headset">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Headset24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="CanvasHeadsetToggle" Click="CanvasDeviceToggle_Click" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Keypad">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="NumberSymbolSquare24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="CanvasKeypadToggle" Click="CanvasDeviceToggle_Click" />
+                </ui:CardControl>
+
                     </StackPanel>
                 </ScrollViewer>
                 <ScrollViewer x:Name="LaptopPage" Visibility="Collapsed" Margin="6,0,4,8" VerticalScrollBarVisibility="Auto">

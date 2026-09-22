@@ -28,6 +28,7 @@ namespace Ambilight.Logic
         private HeadsetLogic _headsetLogic;
         private KeypadLogic _keypadLogic;
         private LampArrayLogic _lampArrayLogic;
+        private LightsCanvasLogic _lightsCanvasLogic;
         private DesktopDuplicatorReader _reader;
 
         // Kept as a field on purpose: the IChroma instance has a finalizer that calls into the
@@ -51,8 +52,10 @@ namespace Ambilight.Logic
             {
                 // Everything that does not depend on Razer software starts first, so that the
                 // laptop keyboard (Windows Dynamic Lighting) works even when Synapse / the
-                // Chroma SDK is missing or not running.
+                // Chroma SDK is missing or not running. The lights canvas is the same story for
+                // Yeelight/Govee devices positioned on it: no Razer dependency at all.
                 _lampArrayLogic = new LampArrayLogic(settings);
+                _lightsCanvasLogic = new LightsCanvasLogic(settings);
                 _reader = new DesktopDuplicatorReader(this, settings);
 
                 await InitializeChromaWithRetryAsync();
@@ -119,7 +122,11 @@ namespace Ambilight.Logic
         /// <param name="img"></param>
         public void ProcessNewImage(Bitmap img)
         {
-            // Skip processing if no devices are enabled
+            // Runs regardless of every other toggle below: lights on the canvas have nothing to do with Razer Chroma
+            // or the other devices, and must keep working even if every one of those is turned off.
+            SafeProcess("lights canvas", _lightsCanvasLogic, img);
+
+            // Skip the rest if no Razer/laptop-keyboard device is enabled
             if (!settings.KeyboardEnabled && !settings.PadEnabled && !settings.MouseEnabled &&
                 !settings.LinkEnabled && !settings.HeadsetEnabled && !settings.KeypadEnabeled &&
                 !settings.LaptopKeyboardEnabled)
@@ -146,6 +153,11 @@ namespace Ambilight.Logic
             if (settings.LaptopKeyboardEnabled)
                 SafeProcess("laptop keyboard", _lampArrayLogic, img);
         }
+
+        /// <summary>Starts the group color test (see <see cref="LinkLogic"/>); does nothing if Chroma is not ready yet.</summary>
+        public void StartColorTest() { _linkLogic?.StartColorTest(); }
+        public void StopColorTest() { _linkLogic?.StopColorTest(); }
+        public bool ColorTestRunning { get { return _linkLogic != null && _linkLogic.ColorTestRunning; } }
 
         private void SafeProcess(string device, IDeviceLogic logic, Bitmap img)
         {

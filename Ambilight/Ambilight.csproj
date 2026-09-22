@@ -212,6 +212,7 @@
     <Compile Include="Logic\KeyboardLogic.cs" />
     <Compile Include="Logic\KeypadLogic.cs" />
     <Compile Include="Logic\LampArrayLogic.cs" />
+    <Compile Include="Logic\LightsCanvasLogic.cs" />
     <Compile Include="Logic\LinkLogic.cs" />
     <Compile Include="Logic\LogicManager.cs" />
     <Compile Include="Logic\MouseLogic.cs" />
@@ -230,6 +231,9 @@
     <Compile Include="GUI\SettingsWindow.Lights.cs">
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="GUI\SettingsWindow.Canvas.cs">
+      <DependentUpon>SettingsWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Lights\Config.cs" />
     <Compile Include="Lights\Discovery.cs" />
     <Compile Include="Lights\Engine.cs" />
@@ -241,6 +245,7 @@
     <Compile Include="Lights\Log.cs" />
     <Compile Include="Lights\MusicLink.cs" />
     <Compile Include="Lights\RazerBroadcast.cs" />
+    <Compile Include="Lights\RazerCanvasFeed.cs" />
     <Compile Include="Util\Extensions.cs" />
     <Compile Include="Util\SettingsMigration.cs" />
     <Compile Include="Util\ColorUtil.cs" />
