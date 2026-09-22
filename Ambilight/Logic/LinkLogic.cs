@@ -36,7 +36,7 @@ namespace Ambilight.Logic
         public void Process(Bitmap newImage)
         {
             Bitmap map = ImageManipulation.ResizeImage(newImage, 4, 1);
-            Bitmap saturatedMap = ImageManipulation.ApplySaturation(map, _settings.Saturation);
+            Bitmap saturatedMap = ImageManipulation.ApplySaturation(map, _settings.Saturation, _settings.DeviceBrightness / 100f);
 
             // Dispose the resized map if saturation created a new bitmap
             if (saturatedMap != map && map != null)

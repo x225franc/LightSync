@@ -26,6 +26,9 @@
     <Setting Name="ambiEnabled" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
+    <Setting Name="keepEffectDuringScreensaver" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
     <Setting Name="ultrawideEnabled" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
@@ -39,6 +42,9 @@
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="laptopBrightness" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">100</Value>
+    </Setting>
+    <Setting Name="deviceBrightness" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">100</Value>
     </Setting>
     <Setting Name="laptopEffect" Type="System.Int32" Scope="User">

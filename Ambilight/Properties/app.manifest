@@ -9,8 +9,8 @@
     publisher/packageName must match Package\AppxManifest.xml exactly.
   -->
   <msix xmlns="urn:schemas-microsoft-com:msix.v1"
-        publisher="CN=RazerAmbilightDev"
-        packageName="RazerAmbilight.Lighting"
+        publisher="CN=LightSyncDev"
+        packageName="LightSync.Lighting"
         applicationId="App" />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>

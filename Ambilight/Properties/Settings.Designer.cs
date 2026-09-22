@@ -167,6 +167,18 @@ namespace Ambilight.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool keepEffectDuringScreensaver {
+            get {
+                return ((bool)(this["keepEffectDuringScreensaver"]));
+            }
+            set {
+                this["keepEffectDuringScreensaver"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool ultrawideEnabled {
             get {
                 return ((bool)(this["ultrawideEnabled"]));
@@ -221,6 +233,18 @@ namespace Ambilight.Properties {
             }
             set {
                 this["laptopBrightness"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("100")]
+        public int deviceBrightness {
+            get {
+                return ((int)(this["deviceBrightness"]));
+            }
+            set {
+                this["deviceBrightness"] = value;
             }
         }
 

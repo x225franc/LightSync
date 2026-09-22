@@ -27,9 +27,13 @@ namespace Ambilight.GUI
         public bool KeypadEnabeled { get; private set; }
         public bool AmbiModeEnabled { get; private set; }
         public bool UltrawideModeEnabled { get; private set; }
+        /// <summary>Keep capturing (and so keep the lighting effect going) while the Windows screensaver runs.</summary>
+        public volatile bool KeepEffectDuringScreensaver;
         public bool AutostartEnabled { get; private set; }
         public bool LaptopKeyboardEnabled { get; private set; }
         public int LaptopBrightness { get; private set; } = 100;
+        /// <summary>Global gain (percent) applied to the colors sent to the Razer devices, and so to Chroma Connect lights.</summary>
+        public int DeviceBrightness { get; private set; } = 100;
         public Logic.LaptopKeyboardEffect LaptopEffect { get; private set; }
         public int LaptopEffectSpeed { get; private set; } = 50;
         public bool LaptopEffectReverse { get; private set; }
@@ -55,6 +59,7 @@ namespace Ambilight.GUI
             KeyboardWidth = KeyboardConstants.MaxColumns;
             KeyboardHeight = KeyboardConstants.MaxRows;
             loadConfig();
+            MigrateAutostartShortcut();
             Thread trayThread = new Thread(InitializeTray);
             trayThread.SetApartmentState(ApartmentState.STA);
             trayThread.Start();
@@ -82,8 +87,10 @@ namespace Ambilight.GUI
                 LinkEnabled = Properties.Settings.Default.linkEnabled;
                 AmbiModeEnabled = Properties.Settings.Default.ambiEnabled;
                 UltrawideModeEnabled = Properties.Settings.Default.ultrawideEnabled;
+                KeepEffectDuringScreensaver = Properties.Settings.Default.keepEffectDuringScreensaver;
                 LaptopKeyboardEnabled = Properties.Settings.Default.laptopKeyboardEnabled;
                 LaptopBrightness = Math.Max(0, Math.Min(100, Properties.Settings.Default.laptopBrightness));
+                DeviceBrightness = Math.Max(10, Math.Min(300, Properties.Settings.Default.deviceBrightness));
                 LaptopEffectSpeed = Math.Max(1, Math.Min(100, Properties.Settings.Default.laptopEffectSpeed));
                 LaptopEffectReverse = Properties.Settings.Default.laptopEffectReverse;
                 LaptopEffect = Enum.IsDefined(typeof(Logic.LaptopKeyboardEffect), Properties.Settings.Default.laptopEffect)
@@ -183,16 +190,17 @@ namespace Ambilight.GUI
             };
 
             contextMenu.Items.Add("Settings", null, (sender, args) => RaiseSettingsRequested());
+            contextMenu.Items.Add("Restart", null, (sender, args) => RestartApplication());
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add("Exit", null, (sender, args) => ExitApplication());
 
             _trayMenu = contextMenu;
-            _trayIcon = new Icon(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Color_Wheel.ico"));
+            _trayIcon = new Icon(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LightSync.ico"));
 
             notifyIcon = new NotifyIcon
             {
                 Icon = _trayIcon,
-                Text = "Razer Ambilight",
+                Text = "LightSync",
                 Visible = true,
                 ContextMenuStrip = contextMenu
             };
@@ -279,6 +287,7 @@ namespace Ambilight.GUI
         public void RestartApplication()
         {
             Properties.Settings.Default.Save();
+            Lights.LightsService.Stop();          // close the Yeelight sessions and leave Govee on its last color
             notifyIcon.Dispose();
             System.Diagnostics.Process.Start(Application.ExecutablePath, "--restarted");
             Environment.Exit(0);
@@ -287,6 +296,7 @@ namespace Ambilight.GUI
         public void ExitApplication()
         {
             Properties.Settings.Default.Save();
+            Lights.LightsService.Stop();          // close the Yeelight sessions and leave Govee on its last color
             notifyIcon.Dispose();
             Environment.Exit(0);
         }
@@ -347,6 +357,13 @@ namespace Ambilight.GUI
             ScheduleSave();
         }
 
+        public void SetDeviceBrightness(int value)
+        {
+            DeviceBrightness = Math.Max(10, Math.Min(300, value));
+            Properties.Settings.Default.deviceBrightness = DeviceBrightness;
+            ScheduleSave();
+        }
+
         public void SetLaptopEffect(Logic.LaptopKeyboardEffect value)
         {
             LaptopEffect = value;
@@ -394,6 +411,13 @@ namespace Ambilight.GUI
         {
             UltrawideModeEnabled = value;
             Properties.Settings.Default.ultrawideEnabled = value;
+            Properties.Settings.Default.Save();
+        }
+
+        public void SetKeepEffectDuringScreensaver(bool value)
+        {
+            KeepEffectDuringScreensaver = value;
+            Properties.Settings.Default.keepEffectDuringScreensaver = value;
             Properties.Settings.Default.Save();
         }
 
@@ -451,16 +475,39 @@ namespace Ambilight.GUI
         }
 
         private static string AutostartShortcutPath =>
-            Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "/Ambilight.lnk";
+            Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "/LightSync.lnk";
 
         private void CreateAutostartShortcut()
         {
             WshShell shell = new WshShell();
             IWshShortcut shortcut = (IWshShortcut)shell.CreateShortcut(AutostartShortcutPath);
-            shortcut.Description = "Ambilight for Razer devices";
-            shortcut.TargetPath = System.IO.Path.GetDirectoryName(Application.ExecutablePath) + "/Ambilight.exe";
+            shortcut.Description = "LightSync: Razer, Yeelight, Govee and laptop keyboard lighting";
+            shortcut.TargetPath = Application.ExecutablePath;
+            shortcut.Arguments = "--minimized";
             shortcut.WorkingDirectory = System.IO.Path.GetDirectoryName(Application.ExecutablePath);
             shortcut.Save();
+        }
+
+        /// <summary>
+        /// The app used to autostart through an "Ambilight.lnk" shortcut. When autostart is on, replace it with the
+        /// LightSync one, so the old exe is not started at logon next to this one.
+        /// </summary>
+        private void MigrateAutostartShortcut()
+        {
+            try
+            {
+                string legacy = Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "/Ambilight.lnk";
+                bool hadLegacy = System.IO.File.Exists(legacy);
+                if (hadLegacy)
+                    System.IO.File.Delete(legacy);
+
+                if (AutostartEnabled && (hadLegacy || !System.IO.File.Exists(AutostartShortcutPath)))
+                    CreateAutostartShortcut();
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "Could not migrate the autostart shortcut.");
+            }
         }
 
         private void RemoveAutostartShortcut()

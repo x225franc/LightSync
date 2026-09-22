@@ -47,11 +47,12 @@ namespace Ambilight
         /// </summary>
         /// <param name="srcBitmap">Bitmap</param>
         /// <param name="saturation">Saturation Value</param>
+        /// <param name="brightness">Gain applied to every channel (1 = unchanged, above 1 brightens; results are clamped)</param>
         /// <returns></returns>
-        public static Bitmap ApplySaturation(Bitmap srcBitmap, float saturation)
+        public static Bitmap ApplySaturation(Bitmap srcBitmap, float saturation, float brightness = 1f)
         {
-            // Skip processing if saturation is 1.0 (no change needed)
-            if (Math.Abs(saturation - 1.0f) < 0.001f)
+            // Skip processing if neither saturation nor brightness changes anything
+            if (Math.Abs(saturation - 1.0f) < 0.001f && Math.Abs(brightness - 1.0f) < 0.001f)
             {
                 return srcBitmap;
             }
@@ -86,15 +87,15 @@ namespace Ambilight
                 }
 
                 // Update ColorMatrix values
-                _cachedColorMatrix.Matrix00 = a;
-                _cachedColorMatrix.Matrix01 = b;
-                _cachedColorMatrix.Matrix02 = c;
-                _cachedColorMatrix.Matrix10 = d;
-                _cachedColorMatrix.Matrix11 = e;
-                _cachedColorMatrix.Matrix12 = f;
-                _cachedColorMatrix.Matrix20 = g;
-                _cachedColorMatrix.Matrix21 = h;
-                _cachedColorMatrix.Matrix22 = i;
+                _cachedColorMatrix.Matrix00 = a * brightness;
+                _cachedColorMatrix.Matrix01 = b * brightness;
+                _cachedColorMatrix.Matrix02 = c * brightness;
+                _cachedColorMatrix.Matrix10 = d * brightness;
+                _cachedColorMatrix.Matrix11 = e * brightness;
+                _cachedColorMatrix.Matrix12 = f * brightness;
+                _cachedColorMatrix.Matrix20 = g * brightness;
+                _cachedColorMatrix.Matrix21 = h * brightness;
+                _cachedColorMatrix.Matrix22 = i * brightness;
 
                 // Set color matrix
                 _cachedImageAttributes.SetColorMatrix(_cachedColorMatrix,

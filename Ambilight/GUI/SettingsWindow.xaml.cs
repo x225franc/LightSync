@@ -16,7 +16,12 @@ namespace Ambilight.GUI
     /// </summary>
     public partial class SettingsWindow : FluentWindow
     {
-        private const string SetupCommand = "& \"C:\\RazerAmbilight\\Package\\Install-LightingProvider.ps1\"";
+        private const string SetupCommand = "& \"C:\\LightSync\\Package\\Install-LightingProvider.ps1\"";
+
+        // Govee LAN discovery is multicast; Windows sends it through the adapter with the lowest
+        // metric, which on a PC with VPN/virtual adapters is often not the Wi-Fi one.
+        private const string GoveeFixCommand = "Set-NetIPInterface -InterfaceAlias \"Wi-Fi\" -AutomaticMetric Disabled -InterfaceMetric 1";
+        private const string GoveeRevertCommand = "Set-NetIPInterface -InterfaceAlias \"Wi-Fi\" -AutomaticMetric Enabled";
 
         // Display order of the effect list; independent of the enum values, which are what gets
         // saved in the user's settings.
@@ -43,8 +48,11 @@ namespace Ambilight.GUI
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
             InitializeComponent();
+            InitLights();
 
             SetupCommandBox.Text = SetupCommand;
+            GoveeFixCommandBox.Text = GoveeFixCommand;
+            GoveeRevertCommandBox.Text = GoveeRevertCommand;
             LaptopColorWheel.ColorChanged += (sender, e) =>
             {
                 if (!_isLoading)
@@ -64,6 +72,11 @@ namespace Ambilight.GUI
             ApplicationThemeManager.Apply(initialTheme, WindowBackdropType.Mica, true);
             ApplicationThemeManager.Apply(this);
             SystemThemeWatcher.Watch(this, WindowBackdropType.Mica, true);
+
+            // Use the accent color chosen in Windows (buttons, sliders, toggles, the selected menu entry) instead of the
+            // default blue, and pick up a change made in Windows Settings the next time this window gets the focus.
+            ApplicationAccentColorManager.ApplySystemAccent();
+            Activated += (sender, e) => ApplicationAccentColorManager.ApplySystemAccent();
 
             // NumberBox only reflects a programmatically-set Value in its visible
             // text once its control template has been applied, which happens
@@ -98,10 +111,16 @@ namespace Ambilight.GUI
             LaptopStatusText.Text = Logic.LampArrayLogic.CurrentStatus;
             UpdateLaptopEffectCards();
 
-            TickrateBox.Text = _settings.Tickrate.ToString();
-            SaturationBox.Text = Math.Round(_settings.Saturation * 100).ToString();
+            TickrateSlider.Value = Math.Max(1, Math.Min(60, _settings.Tickrate));
+            TickrateText.Text = Math.Max(1, Math.Min(60, _settings.Tickrate)) + " fps";
+            int saturation = (int)Math.Round(Math.Max(-100, Math.Min(300, _settings.Saturation * 100)) / 5.0) * 5;
+            SaturationSlider.Value = saturation;
+            SaturationText.Text = saturation + " %";
+            DeviceBrightnessSlider.Value = _settings.DeviceBrightness;
+            DeviceBrightnessText.Text = _settings.DeviceBrightness + "%";
             AmbiToggle.IsChecked = _settings.AmbiModeEnabled;
             UltrawideToggle.IsChecked = _settings.UltrawideModeEnabled;
+            KeepScreensaverToggle.IsChecked = _settings.KeepEffectDuringScreensaver;
 
             KeyboardWidthBox.Text = _settings.KeyboardWidth.ToString();
             KeyboardHeightBox.Text = _settings.KeyboardHeight.ToString();
@@ -258,6 +277,16 @@ namespace Ambilight.GUI
                 _settings.SetLaptopBrightness((int)e.NewValue);
         }
 
+        private void DeviceBrightnessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (DeviceBrightnessText == null)
+                return;
+
+            DeviceBrightnessText.Text = (int)e.NewValue + "%";
+            if (!_isLoading)
+                _settings.SetDeviceBrightness((int)e.NewValue);
+        }
+
         private void LaptopSpeedSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (LaptopSpeedText == null)
@@ -266,6 +295,25 @@ namespace Ambilight.GUI
             LaptopSpeedText.Text = (int)e.NewValue + "%";
             if (!_isLoading)
                 _settings.SetLaptopEffectSpeed((int)e.NewValue);
+        }
+
+        private void CopyGoveeFixCommand_Click(object sender, RoutedEventArgs e) =>
+            CopyToClipboard(GoveeFixCommand);
+
+        private void CopyGoveeRevertCommand_Click(object sender, RoutedEventArgs e) =>
+            CopyToClipboard(GoveeRevertCommand);
+
+        private void CopyToClipboard(string text)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetText(text);
+                StatusText.Text = "Command copied to the clipboard.";
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Could not copy: " + ex.Message;
+            }
         }
 
         private void CopySetupCommand_Click(object sender, RoutedEventArgs e)
@@ -284,27 +332,35 @@ namespace Ambilight.GUI
         private void AmbiToggle_Click(object sender, RoutedEventArgs e) =>
             _settings.SetAmbiModeEnabled(AmbiToggle.IsChecked ?? false);
 
+        private void KeepScreensaverToggle_Click(object sender, RoutedEventArgs e) =>
+            _settings.SetKeepEffectDuringScreensaver(KeepScreensaverToggle.IsChecked ?? false);
+
         private void UltrawideToggle_Click(object sender, RoutedEventArgs e) =>
             _settings.SetUltrawideModeEnabled(UltrawideToggle.IsChecked ?? false);
 
         private void AutostartToggle_Click(object sender, RoutedEventArgs e) =>
             _settings.SetAutostartEnabled(AutostartToggle.IsChecked ?? false);
 
-        private void TickrateBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        private void TickrateSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (_isLoading || !int.TryParse(TickrateBox.Text, out var value))
+            if (TickrateText == null)
                 return;
 
-            _settings.SetTickrate(Math.Max(1, Math.Min(60, value)));
+            int value = (int)e.NewValue;
+            TickrateText.Text = value + " fps";
+            if (!_isLoading)
+                _settings.SetTickrate(value);
         }
 
-        private void SaturationBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        private void SaturationSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (_isLoading || !double.TryParse(SaturationBox.Text, out var value))
+            if (SaturationText == null)
                 return;
 
-            value = Math.Max(-100, Math.Min(300, value));
-            _settings.SetSaturation((float)(value / 100.0));
+            int value = (int)e.NewValue;
+            SaturationText.Text = value + " %";
+            if (!_isLoading)
+                _settings.SetSaturation((float)(value / 100.0));
         }
 
         private void ApplyKeyboardSize_Click(object sender, RoutedEventArgs e)

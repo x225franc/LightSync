@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Sparse package: gives the existing Ambilight.exe (which stays in its normal folder, the
+  Sparse package: gives the existing LightSync.exe (which stays in its normal folder, the
   "external location") a package identity without converting the app to MSIX.
 
   The com.microsoft.windows.lighting AppExtension is what makes Windows list the app under
   Settings > Personalization > Dynamic Lighting > Background light control, so it can be
   prioritised to drive LampArray devices while another app is in the foreground.
+
+  File-system and registry write virtualization are switched off: a packaged app otherwise gets its
+  writes to %LOCALAPPDATA% silently redirected into the package's private folder, which hides the
+  settings and lights configuration from the normal place.
 
   Identity Name/Publisher must match the <msix> element in Properties\app.manifest.
 -->
@@ -14,20 +18,23 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap3 uap10 rescap">
+  IgnorableNamespaces="uap uap3 uap10 desktop6 rescap">
 
   <Identity
-    Name="RazerAmbilight.Lighting"
-    Publisher="CN=RazerAmbilightDev"
+    Name="LightSync.Lighting"
+    Publisher="CN=LightSyncDev"
     Version="1.0.0.0"
     ProcessorArchitecture="neutral" />
 
   <Properties>
-    <DisplayName>Razer Ambilight</DisplayName>
-    <PublisherDisplayName>Razer Ambilight</PublisherDisplayName>
+    <DisplayName>LightSync</DisplayName>
+    <PublisherDisplayName>LightSync</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
   </Properties>
 
   <Resources>
@@ -40,20 +47,21 @@
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
   </Capabilities>
 
   <Applications>
-    <Application Id="App" Executable="Ambilight.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="App" Executable="LightSync.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="Razer Ambilight"
-        Description="Screen ambilight effect for Razer Chroma and Windows Dynamic Lighting devices"
+        DisplayName="LightSync"
+        Description="Screen ambilight and Chroma-synced lights (Razer, Yeelight, Govee, laptop keyboard)"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png"
         AppListEntry="none" />
       <Extensions>
         <uap3:Extension Category="windows.appExtension">
-          <uap3:AppExtension Name="com.microsoft.windows.lighting" Id="Id" PublicFolder="public" DisplayName="Razer Ambilight" />
+          <uap3:AppExtension Name="com.microsoft.windows.lighting" Id="Id" PublicFolder="public" DisplayName="LightSync" />
         </uap3:Extension>
       </Extensions>
     </Application>

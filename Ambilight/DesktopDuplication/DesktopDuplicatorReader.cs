@@ -33,7 +33,33 @@ namespace Ambilight.DesktopDuplication
         private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, ref bool pvParam, uint fWinIni);
 
         private const uint SPI_GETSCREENSAVERRUNNING = 0x0072;
-        private bool _screensaverSuspended;
+
+        // Windows says the screensaver is running. What the capture loop does about it depends on the
+        // "keep the effect during the screensaver" setting: pause (default, the old behavior), or follow it.
+        private bool _screensaverActive;
+
+        // The screensaver runs on its own desktop ("Screen-saver"), and desktop duplication only works from a
+        // thread that sits on the desktop currently receiving input. Following that desktop is what lets the
+        // capture keep going; without it Windows answers "access denied" as soon as the screensaver starts.
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint desiredAccess);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetThreadDesktop(IntPtr desktop);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool CloseDesktop(IntPtr desktop);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool GetUserObjectInformation(IntPtr obj, int index, System.Text.StringBuilder info, int length, out int lengthNeeded);
+
+        private const int UOI_NAME = 2;
+        private const uint GENERIC_ALL = 0x10000000;
+        private IntPtr _attachedDesktop = IntPtr.Zero;
+        private string _attachedDesktopName;
+        private DateTime _lastAttachAttempt = DateTime.MinValue;
+
+        private bool ScreensaverPausesCapture => _screensaverActive && !settings.KeepEffectDuringScreensaver;
 
         public DesktopDuplicatorReader(Logic.LogicManager logic, GUI.TraySettings settings)
         {
@@ -126,17 +152,71 @@ namespace Ambilight.DesktopDuplication
                 return;
             }
 
-            if (isRunning && !_screensaverSuspended)
+            if (isRunning == _screensaverActive)
+                return;
+
+            _screensaverActive = isRunning;
+
+            // The desktop is switching, so the current duplicator is lost either way: rebuild it.
+            ForceReinitialize();
+            if (isRunning)
+                _log.Info(settings.KeepEffectDuringScreensaver
+                    ? "Screensaver engaged, following it (capture continues)."
+                    : "Screensaver engaged, pausing desktop capture.");
+            else
+                _log.Info("Screensaver dismissed, reinitializing desktop capture.");
+        }
+
+        /// <summary>
+        /// While the screensaver runs (and once afterwards, to get back) keeps this thread on the desktop that
+        /// receives input. Does nothing in the normal case. Never touches anything from another thread.
+        /// </summary>
+        private void FollowInputDesktop()
+        {
+            bool needed = _screensaverActive && settings.KeepEffectDuringScreensaver;
+            bool onOtherDesktop = _attachedDesktopName != null
+                && !string.Equals(_attachedDesktopName, "Default", StringComparison.OrdinalIgnoreCase);
+            if (!needed && !onOtherDesktop)
+                return;
+
+            var now = DateTime.UtcNow;
+            if ((now - _lastAttachAttempt).TotalMilliseconds < 400)
+                return;
+            _lastAttachAttempt = now;
+
+            // Fails while the input desktop is a secure one (lock screen, UAC): then there is nothing to capture anyway.
+            IntPtr input = OpenInputDesktop(0, false, GENERIC_ALL);
+            if (input == IntPtr.Zero)
+                return;
+
+            string name = DesktopName(input);
+            if (string.Equals(name, _attachedDesktopName, StringComparison.OrdinalIgnoreCase))
             {
-                _log.Debug("Screensaver engaged, pausing desktop capture.");
-                _screensaverSuspended = true;
+                CloseDesktop(input);
+                return;
             }
-            else if (!isRunning && _screensaverSuspended)
+
+            if (SetThreadDesktop(input))
             {
-                _log.Debug("Screensaver dismissed, reinitializing desktop capture.");
+                var previous = _attachedDesktop;
+                _attachedDesktop = input;
+                _attachedDesktopName = name;
+                if (previous != IntPtr.Zero)
+                    CloseDesktop(previous);          // no longer this thread's desktop, so it can be released
+
+                _log.Info("Capture thread now follows the \"" + name + "\" desktop.");
                 ForceReinitialize();
-                _screensaverSuspended = false;
             }
+            else
+            {
+                CloseDesktop(input);
+            }
+        }
+
+        private static string DesktopName(IntPtr desktop)
+        {
+            var sb = new System.Text.StringBuilder(256);
+            return GetUserObjectInformation(desktop, UOI_NAME, sb, sb.Capacity * 2, out _) ? sb.ToString() : "?";
         }
 
         public bool IsRunning { get; private set; } = false;
@@ -189,8 +269,9 @@ namespace Ambilight.DesktopDuplication
                         ForceReinitialize();
 
                     UpdateScreensaverState();
+                    FollowInputDesktop();
 
-                    if (_suspended || _screensaverSuspended)
+                    if (_suspended || ScreensaverPausesCapture)
                     {
                         // Machine is suspending/locked, or the screensaver is
                         // active: don't touch DXGI at all. Cheap poll,

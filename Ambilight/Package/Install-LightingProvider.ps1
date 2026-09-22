@@ -1,20 +1,21 @@
 <#
-  Registers Razer Ambilight as a Windows Dynamic Lighting "background light control" app.
+  Registers LightSync as a Windows Dynamic Lighting "background light control" app.
 
   What it does (one-time, must run as Administrator):
-    1. creates a self-signed code-signing certificate (CN=RazerAmbilightDev) and trusts it
-    2. builds + signs a small sparse MSIX package containing only the manifest
-    3. registers it with C:\RazerAmbilight as the external location, giving Ambilight.exe
+    1. removes the previous registration under the old name (RazerAmbilight.Lighting) and its certificate
+    2. creates a self-signed code-signing certificate (CN=LightSyncDev) and trusts it
+    3. builds + signs a small sparse MSIX package containing only the manifest
+    4. registers it with C:\LightSync as the external location, giving LightSync.exe
        package identity and the com.microsoft.windows.lighting extension
 
   Afterwards: Settings > Personalization > Dynamic Lighting > (click the laptop keyboard card)
-  > Background light control, and drag "Razer Ambilight" above the other apps.
+  > Background light control, and drag "LightSync" above the other apps.
 
-  Usage (elevated):  .\Install-LightingProvider.ps1 [-AppDir C:\RazerAmbilight]
+  Usage (elevated):  .\Install-LightingProvider.ps1 [-AppDir C:\LightSync]
   Remove:            .\Install-LightingProvider.ps1 -Uninstall
 #>
 param(
-    [string]$AppDir = 'C:\RazerAmbilight',
+    [string]$AppDir = 'C:\LightSync',
     [switch]$Uninstall
 )
 
@@ -33,18 +34,33 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     throw 'Run this script from an elevated (Administrator) PowerShell.'
 }
 
-$packageName = 'RazerAmbilight.Lighting'
-$subject     = 'CN=RazerAmbilightDev'
+$packageName = 'LightSync.Lighting'
+$subject     = 'CN=LightSyncDev'
 $here        = Split-Path -Parent $PSCommandPath
+
+# Names this app was registered under before it was called LightSync.
+$legacyPackages = @('RazerAmbilight.Lighting')
+$legacySubjects = @('CN=RazerAmbilightDev')
+
+function Remove-LegacyRegistrations {
+    foreach ($name in $legacyPackages) {
+        $old = Get-AppxPackage -Name $name -ErrorAction SilentlyContinue
+        if ($old) { $old | Remove-AppxPackage; Write-Host "Removed the old registration: $name" }
+    }
+    foreach ($old in $legacySubjects) {
+        Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object Subject -eq $old | Remove-Item
+    }
+}
 
 if ($Uninstall) {
     Get-AppxPackage -Name $packageName | Remove-AppxPackage
     Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object Subject -eq $subject | Remove-Item
-    Write-Host 'Razer Ambilight lighting package removed.'
+    Remove-LegacyRegistrations
+    Write-Host 'LightSync lighting package removed.'
     return
 }
 
-if (-not (Test-Path (Join-Path $AppDir 'Ambilight.exe'))) { throw "Ambilight.exe not found in $AppDir" }
+if (-not (Test-Path (Join-Path $AppDir 'LightSync.exe'))) { throw "LightSync.exe not found in $AppDir" }
 
 $sdkBin = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Directory |
     Where-Object { Test-Path (Join-Path $_.FullName 'x64\makeappx.exe') } |
@@ -53,7 +69,9 @@ if (-not $sdkBin) { throw 'Windows SDK (makeappx.exe / signtool.exe) not found.'
 $makeappx = Join-Path $sdkBin.FullName 'x64\makeappx.exe'
 $signtool = Join-Path $sdkBin.FullName 'x64\signtool.exe'
 
-$work = Join-Path $env:TEMP 'RazerAmbilightLightingPkg'
+Remove-LegacyRegistrations
+
+$work = Join-Path $env:TEMP 'LightSyncLightingPkg'
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 $stage = Join-Path $work 'stage'
 New-Item -ItemType Directory -Path "$stage\Assets", "$stage\public" -Force | Out-Null
@@ -62,7 +80,7 @@ Copy-Item (Join-Path $here 'public\readme.txt') "$stage\public"
 
 # Package logos, rendered from the app icon.
 Add-Type -AssemblyName System.Drawing
-$icon = New-Object System.Drawing.Icon((Join-Path $AppDir 'Color_Wheel.ico'), 256, 256)
+$icon = New-Object System.Drawing.Icon((Join-Path $AppDir 'LightSync.ico'), 256, 256)
 foreach ($logo in @(@('StoreLogo', 50), @('Square44x44Logo', 44), @('Square150x150Logo', 150))) {
     $bmp = New-Object System.Drawing.Bitmap($logo[1], $logo[1])
     $g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -77,10 +95,10 @@ foreach ($logo in @(@('StoreLogo', 50), @('Square44x44Logo', 44), @('Square150x1
 $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -eq $subject | Select-Object -First 1
 if (-not $cert) {
     $cert = New-SelfSignedCertificate -Type Custom -Subject $subject -KeyUsage DigitalSignature `
-        -FriendlyName 'Razer Ambilight (dev)' -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(10) `
+        -FriendlyName 'LightSync (dev)' -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(10) `
         -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
 }
-$cer = Join-Path $work 'RazerAmbilightDev.cer'
+$cer = Join-Path $work 'LightSyncDev.cer'
 Export-Certificate -Cert $cert -FilePath $cer | Out-Null
 Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
 
@@ -104,4 +122,4 @@ if (-not $installed) { throw 'Registration did not produce an installed package.
 Write-Host ''
 Write-Host "Registered: $($installed.PackageFullName)"
 Write-Host "External location: $($installed.InstallLocation)"
-Write-Host 'Now (re)start Ambilight from that folder, then open Settings > Personalization > Dynamic Lighting.'
+Write-Host 'Now (re)start LightSync from that folder, then open Settings > Personalization > Dynamic Lighting.'

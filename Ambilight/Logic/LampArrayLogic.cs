@@ -271,7 +271,7 @@ namespace Ambilight.Logic
         private void LogAvailabilityChange(bool available)
         {
             CurrentStatus = available
-                ? "Active - Windows gave control of the keyboard to Razer Ambilight"
+                ? "Active - Windows gave control of the keyboard to LightSync"
                 : "Waiting for Windows to grant control (can take about 30 seconds after start)";
 
             if (available == _lastLoggedAvailability)

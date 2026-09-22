@@ -17,3 +17,10 @@
 /UpgradeLog2.htm
 *.exe
 *.msi
+
+# LightSync / Light Connect build output
+**/bin/
+**/obj/
+*.log
+*.dll
+!/Ambilight/Package/*.dll

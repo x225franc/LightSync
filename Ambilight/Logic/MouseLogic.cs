@@ -31,7 +31,7 @@ namespace Ambilight.Logic
         {
             Bitmap mapMouse = ImageManipulation.ResizeImage(newImage, MouseConstants.MaxColumns,
                     MouseConstants.MaxRows);
-            Bitmap saturatedMap = ImageManipulation.ApplySaturation(mapMouse, _settings.Saturation);
+            Bitmap saturatedMap = ImageManipulation.ApplySaturation(mapMouse, _settings.Saturation, _settings.DeviceBrightness / 100f);
 
             // Dispose the resized map if saturation created a new bitmap
             if (saturatedMap != mapMouse && mapMouse != null)

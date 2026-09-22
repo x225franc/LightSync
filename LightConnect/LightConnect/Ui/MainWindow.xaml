@@ -1,0 +1,309 @@
+<ui:FluentWindow
+    x:Class="LightConnect.Ui.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="Light Connect"
+    Height="640"
+    Width="900"
+    MinHeight="460"
+    MinWidth="720"
+    WindowStartupLocation="CenterScreen"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Light Connect" ShowMaximize="False" />
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="190" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Menu -->
+            <ListBox x:Name="NavList" Grid.Column="0" Margin="10,8,6,10" SelectedIndex="0"
+                     BorderThickness="0" Background="Transparent"
+                     SelectionChanged="NavList_SelectionChanged">
+                <ListBoxItem AutomationProperties.AutomationId="NavDevices">
+                    <StackPanel Orientation="Horizontal" Margin="4,7">
+                        <ui:SymbolIcon Symbol="Lightbulb24" Margin="0,0,12,0" />
+                        <TextBlock Text="Devices" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem AutomationProperties.AutomationId="NavSettings">
+                    <StackPanel Orientation="Horizontal" Margin="4,7">
+                        <ui:SymbolIcon Symbol="Settings24" Margin="0,0,12,0" />
+                        <TextBlock Text="Settings" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
+            </ListBox>
+
+            <!-- Pages -->
+            <Grid Grid.Column="1">
+                <ScrollViewer x:Name="DevicesPage" Margin="6,0,4,16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,18,0">
+
+                <!-- Master switch -->
+                <TextBlock Text="Light control" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,8" />
+                <ui:CardControl Margin="0,0,0,4" Header="Control the lights with Razer Chroma">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Lightbulb24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="ControlToggle" AutomationProperties.AutomationId="ControlToggle"
+                                     Checked="ControlToggle_Changed" Unchecked="ControlToggle_Changed" />
+                </ui:CardControl>
+
+                <!-- Chroma status -->
+                <TextBlock Text="Razer Chroma Connect" FontSize="14" FontWeight="SemiBold" Margin="0,16,0,8" />
+                <ui:CardControl Margin="0,0,0,4">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock x:Name="ChromaStatusText" TextWrapping="Wrap" FontWeight="SemiBold" />
+                            <TextBlock x:Name="ScanStatusText" TextWrapping="Wrap" Margin="0,2,0,0" Opacity="0.7" FontSize="12" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Sparkle24" />
+                    </ui:CardControl.Icon>
+                    <ui:Button x:Name="RescanButton" Content="Search again" Click="RescanButton_Click" />
+                </ui:CardControl>
+
+                <!-- Shown when Windows Firewall has no rule for this app (Yeelight bulbs connect back to the PC) -->
+                <Border x:Name="FirewallBanner" Visibility="Collapsed" Margin="0,4,0,4" Padding="14" CornerRadius="8"
+                        Background="#33E5484D" BorderBrush="#88E5484D" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"
+                                   Text="Windows Firewall may be blocking the Yeelight bulbs." />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Opacity="0.85"
+                                   Text="Yeelight bulbs connect back to this PC to receive colors, and there is no firewall rule for Light Connect yet. Allow it once (Windows will ask for administrator permission)." />
+                        <ui:Button Content="Allow Light Connect in the firewall" Click="AllowFirewallButton_Click" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Shown only while an original app that drives the same lights is running -->
+                <Border x:Name="YeelightBanner" Visibility="Collapsed" Margin="0,4,0,4" Padding="14" CornerRadius="8"
+                        Background="#33E3A008" BorderBrush="#88E3A008" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"
+                                   Text="The official Yeelight Chroma Connector is running." />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Opacity="0.85"
+                                   Text="It drives the same bulbs, so the two would fight over them. Close it and turn off its autostart to let this app take over." />
+                        <ui:Button Content="Close it and disable its autostart" Click="DisableYeelightButton_Click" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="GoveeBanner" Visibility="Collapsed" Margin="0,4,0,4" Padding="14" CornerRadius="8"
+                        Background="#33E3A008" BorderBrush="#88E3A008" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"
+                                   Text="Govee Desktop is running." />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Opacity="0.85"
+                                   Text="It drives the same devices and also uses the network port this app needs. Close it and turn off its autostart to let this app take over (you can still open it by hand whenever you want)." />
+                        <ui:Button Content="Close it and disable its autostart" Click="DisableGoveeButton_Click" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Bulbs -->
+                <TextBlock Text="Devices" FontSize="14" FontWeight="SemiBold" Margin="0,16,0,8" />
+                <TextBlock x:Name="NoBulbsText" Visibility="Collapsed" TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,8"
+                           Text="No device found yet. Make sure LAN Control is on for each device (in the Yeelight app, and in Govee Home) and that this PC is on the same Wi-Fi." />
+
+                <ItemsControl x:Name="BulbList">
+                    <ItemsControl.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="2,10,0,6">
+                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Opacity="0.9" />
+                                        <TextBlock Text="{Binding ItemCount, StringFormat=' ({0})'}" FontSize="13" Opacity="0.6" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ItemsControl.GroupStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,6" Padding="14" CornerRadius="8" BorderThickness="1"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse Grid.Column="0" Width="34" Height="34" Margin="0,2,14,0" VerticalAlignment="Top"
+                                             Fill="{Binding Swatch}" Stroke="#66808080" StrokeThickness="1" />
+
+                                    <StackPanel Grid.Column="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Subtitle}" Opacity="0.7" FontSize="12" Margin="0,1,0,0" />
+                                            </StackPanel>
+                                            <ui:Button Grid.Column="1" Content="Preview" VerticalAlignment="Top" Margin="8,0,0,0"
+                                                       Command="{Binding PreviewCommand}"
+                                                       ToolTip="Blinks this bulb white so you can see which one it is" />
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                                            <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center" Fill="{Binding StatusBrush}" />
+                                            <TextBlock Text="{Binding StatusText}" FontSize="12" Opacity="0.85" TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="112" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Name" VerticalAlignment="Center" />
+                                            <ui:TextBox Grid.Column="1" PlaceholderText="Give this bulb a name"
+                                                        Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="112" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Chroma group" VerticalAlignment="Center" />
+                                            <ComboBox Grid.Column="1" HorizontalAlignment="Left" Width="190"
+                                                      Visibility="{Binding YeelightChoices}"
+                                                      SelectedIndex="{Binding Group, Mode=TwoWay}">
+                                                <ComboBoxItem Content="Off (not controlled)" />
+                                                <ComboBoxItem Content="Global" />
+                                                <ComboBoxItem Content="Group 1" />
+                                                <ComboBoxItem Content="Group 2" />
+                                                <ComboBoxItem Content="Group 3" />
+                                                <ComboBoxItem Content="Group 4" />
+                                            </ComboBox>
+                                            <ComboBox Grid.Column="1" HorizontalAlignment="Left" Width="230"
+                                                      Visibility="{Binding GoveeChoices}"
+                                                      SelectedIndex="{Binding Group, Mode=TwoWay}">
+                                                <ComboBoxItem Content="Off (not controlled)" />
+                                                <ComboBoxItem Content="Global" />
+                                                <ComboBoxItem Content="Group 1" />
+                                                <ComboBoxItem Content="Group 2" />
+                                                <ComboBoxItem Content="Group 3" />
+                                                <ComboBoxItem Content="Group 4" />
+                                                <ComboBoxItem Content="Groups 1-4 (gradient)" />
+                                            </ComboBox>
+                                        </Grid>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="112" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="46" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Brightness" VerticalAlignment="Center" />
+                                            <Slider Grid.Column="1" Minimum="1" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                                                    VerticalAlignment="Center" Value="{Binding Brightness, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding BrightnessText}" TextAlignment="Right" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed" Margin="6,0,4,16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,18,0">
+
+                <!-- Startup -->
+                <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,8" />
+                <ui:CardControl Margin="0,0,0,4" Header="Start with Windows">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Power24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="AutoStartToggle" Click="AutoStartToggle_Click" />
+                </ui:CardControl>
+                <TextBlock Text="Update rate" FontSize="14" FontWeight="SemiBold" Margin="0,16,0,8" />
+                <ui:CardControl Margin="0,0,0,4" Header="Smooth transitions (interpolation)">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Sparkle24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="InterpolateToggle" AutomationProperties.AutomationId="InterpolateToggle"
+                                     Checked="InterpolateToggle_Changed" Unchecked="InterpolateToggle_Changed"
+                                     ToolTip="Razer sends about 20 colors per second. This blends between them so lights glide at the update rate below instead of stepping." />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Yeelight: turn off in the dark">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Lightbulb24" />
+                    </ui:CardControl.Icon>
+                    <StackPanel Orientation="Horizontal">
+                        <Slider x:Name="YeelightOffSlider" Width="150" Minimum="0" Maximum="25" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="YeelightOffSlider_ValueChanged" />
+                        <TextBlock x:Name="YeelightOffText" Width="96" TextAlignment="Right" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Yeelight: fade out before turning off">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Lightbulb24" />
+                    </ui:CardControl.Icon>
+                    <StackPanel Orientation="Horizontal">
+                        <Slider x:Name="YeelightFadeSlider" Width="150" Minimum="0" Maximum="1500" TickFrequency="50"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="YeelightFadeSlider_ValueChanged" />
+                        <TextBlock x:Name="YeelightFadeText" Width="96" TextAlignment="Right" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Govee update rate (frames per second)">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Gauge24" />
+                    </ui:CardControl.Icon>
+                    <StackPanel Orientation="Horizontal">
+                        <Slider x:Name="GoveeFpsSlider" Width="150" Minimum="5" Maximum="30" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="GoveeFpsSlider_ValueChanged" />
+                        <TextBlock x:Name="GoveeFpsText" Width="60" TextAlignment="Right" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Yeelight update rate (frames per second)">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Gauge24" />
+                    </ui:CardControl.Icon>
+                    <StackPanel Orientation="Horizontal">
+                        <Slider x:Name="YeelightFpsSlider" Width="150" Minimum="5" Maximum="30" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="YeelightFpsSlider_ValueChanged" />
+                        <TextBlock x:Name="YeelightFpsText" Width="60" TextAlignment="Right" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:CardControl>
+                <TextBlock Text="Maintenance" FontSize="14" FontWeight="SemiBold" Margin="0,16,0,8" />
+                <ui:CardControl Margin="0,0,0,4" Header="Log files">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Document24" />
+                    </ui:CardControl.Icon>
+                    <ui:Button Content="Open folder" Click="OpenLogs_Click" />
+                </ui:CardControl>
+                <ui:CardControl x:Name="RestoreCard" Visibility="Collapsed" Margin="0,0,0,4"
+                                Header="Autostart of the original apps was turned off">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="ArrowUndo24" />
+                    </ui:CardControl.Icon>
+                    <ui:Button Content="Restore them" Click="RestoreOriginals_Click" />
+                </ui:CardControl>
+
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

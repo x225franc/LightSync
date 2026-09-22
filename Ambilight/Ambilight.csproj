@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\Costura.Fody.4.1.0\build\Costura.Fody.props" Condition="Exists('..\packages\Costura.Fody.4.1.0\build\Costura.Fody.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
@@ -8,7 +8,7 @@
     <ProjectGuid>{3705D85C-E977-4912-A3F4-54D09EB45EFC}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>Ambilight</RootNamespace>
-    <AssemblyName>Ambilight</AssemblyName>
+    <AssemblyName>LightSync</AssemblyName>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -89,7 +89,7 @@
     <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>Color_Wheel.ico</ApplicationIcon>
+    <ApplicationIcon>LightSync.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="AutoUpdater.NET, Version=1.6.3.0, Culture=neutral, PublicKeyToken=501435c91b35f4bc, processorArchitecture=MSIL">
@@ -223,10 +223,26 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
+    <Compile Include="GUI\BulbViewModel.cs" />
     <Compile Include="GUI\SettingsWindow.xaml.cs">
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="GUI\SettingsWindow.Lights.cs">
+      <DependentUpon>SettingsWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Lights\Config.cs" />
+    <Compile Include="Lights\Discovery.cs" />
+    <Compile Include="Lights\Engine.cs" />
+    <Compile Include="Lights\ExternalApps.cs" />
+    <Compile Include="Lights\Firewall.cs" />
+    <Compile Include="Lights\GoveeCatalog.cs" />
+    <Compile Include="Lights\GoveeNet.cs" />
+    <Compile Include="Lights\LightsService.cs" />
+    <Compile Include="Lights\Log.cs" />
+    <Compile Include="Lights\MusicLink.cs" />
+    <Compile Include="Lights\RazerBroadcast.cs" />
     <Compile Include="Util\Extensions.cs" />
+    <Compile Include="Util\SettingsMigration.cs" />
     <Compile Include="Util\ColorUtil.cs" />
     <Compile Include="Util\FastBitmap.cs" />
     <Compile Include="Util\FpsLogger.cs" />
@@ -260,7 +276,16 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Color_Wheel.ico">
+    <Content Include="LightSync.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Package\AppxManifest.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Package\Install-LightingProvider.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Package\public\readme.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="FodyWeavers.xml">
