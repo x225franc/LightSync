@@ -102,7 +102,7 @@ Requirements:
 msbuild Ambilight\Ambilight.csproj /p:Configuration=Release
 ```
 
-The output is `Ambilight\bin\Releaseightsync.exe`. copy it to `C:\LightSync` if you use the laptop keyboard package.
+The output is `Ambilight\bin\Release\LightSync.exe`. Copy it to `C:\LightSync` if you use the laptop keyboard package.
 
 ## Troubleshooting
 
