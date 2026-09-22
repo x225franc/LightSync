@@ -273,12 +273,15 @@ namespace Ambilight.DesktopDuplication
 
                     if (_suspended || ScreensaverPausesCapture)
                     {
-                        // Machine is suspending/locked, or the screensaver is
-                        // active: don't touch DXGI at all. Cheap poll,
-                        // effectively zero CPU while parked here.
+                        // Machine is suspending/locked, or the screensaver is active: don't touch DXGI at all.
+                        // Cheap poll, effectively zero CPU while parked here. The lights (Yeelight/Govee) freeze at
+                        // their last color for as long as this flag is set, instead of possibly reacting to
+                        // whatever Chroma Connect does or doesn't broadcast while nothing is actually being captured.
+                        Lights.ScreenState.CapturePaused = true;
                         Thread.Sleep(250);
                         continue;
                     }
+                    Lights.ScreenState.CapturePaused = false;
 
                     try
                     {

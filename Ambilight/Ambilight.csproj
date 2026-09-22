@@ -246,6 +246,7 @@
     <Compile Include="Lights\MusicLink.cs" />
     <Compile Include="Lights\RazerBroadcast.cs" />
     <Compile Include="Lights\RazerCanvasFeed.cs" />
+    <Compile Include="Lights\ScreenState.cs" />
     <Compile Include="Util\Extensions.cs" />
     <Compile Include="Util\SettingsMigration.cs" />
     <Compile Include="Util\ColorUtil.cs" />

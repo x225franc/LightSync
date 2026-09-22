@@ -565,6 +565,11 @@ namespace Ambilight.Lights
 
             if (b.Identifying) return;
 
+            // Screen capture itself is paused (screensaver, lock, suspend): freeze at the last color instead of
+            // reacting to whatever Chroma Connect/the canvas does or doesn't send meanwhile. The reconnect logic
+            // above still runs, so the session stays warm; only the color (and the dark/off fade) stops moving.
+            if (ScreenState.CapturePaused) return;
+
             if (b.BrightnessDirty) { b.BrightnessDirty = false; b.LastSentRgb = -1; }    // the new setting is applied with the next color
 
             int rgb;
@@ -687,6 +692,10 @@ namespace Ambilight.Lights
             }
             if (b.Identifying) return;
 
+            // Screen capture itself is paused (screensaver, lock, suspend): freeze at the last color instead of
+            // reacting to whatever Chroma Connect/the canvas does or doesn't send meanwhile.
+            if (ScreenState.CapturePaused) return;
+
             if (b.GoveeRamp < 3 && now >= b.GoveeRampAt)
             {
                 b.GoveeRamp++;                                   // 1/3, 2/3, then the full setting
@@ -800,6 +809,16 @@ namespace Ambilight.Lights
             b.Failures++;
             b.NextAttempt = DateTime.UtcNow.AddSeconds(Math.Min(10, 2 * b.Failures));
             if (b.Failures >= 2) _scanNow.Set();   // its IP may have changed
+
+            // The bulb answers discovery (we have its current IP from a recent scan) but refuses the control port
+            // itself, steadily, for a while - not a Wi-Fi blip. This is the known Yeelight firmware quirk where LAN
+            // Control silently gets stuck off; nothing sent over the LAN can fix it, only the toggle in the Yeelight
+            // app (off, then on again) resets it. Said once per bulb per bad patch, not on every retry.
+            if (b.Failures == 6 && b.Error == "bulb did not accept the TCP connection")
+            {
+                b.Error = "LAN Control looks stuck off - toggle it off then on for this bulb in the Yeelight app";
+                Log.Warn(b.Ip + " has refused the control port for a while despite answering discovery - " + b.Error + ".");
+            }
         }
 
         void DropLink(BulbState b)
