@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Ambilight.GUI;
+using Ambilight.Lights;
 using Ambilight.Util;
 using NLog;
 using Windows.Devices.Enumeration;
@@ -81,7 +82,7 @@ namespace Ambilight.Logic
 
             var colors = new WinColor[positions.Length];
 
-            Bitmap map = ImageManipulation.ResizeImage(newImage, GridWidth, GridHeight, _settings.UltrawideModeEnabled);
+            Bitmap map = RazerCanvasFeed.Resize(newImage, "Laptop", GridWidth, GridHeight, _settings.UltrawideModeEnabled);
             Bitmap saturatedMap = ImageManipulation.ApplySaturation(map, _settings.Saturation);
             if (saturatedMap != map)
                 map.Dispose();

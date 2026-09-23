@@ -110,6 +110,10 @@ namespace Ambilight.GUI
             ("Mousepad", "Mousepad", Colore.Effects.Mousepad.MousepadConstants.MaxLeds, 1),
             ("Headset", "Headset", 2, 1),
             ("Keypad", "Keypad", Colore.Effects.Keypad.KeypadConstants.MaxColumns, Colore.Effects.Keypad.KeypadConstants.MaxRows),
+            // Not a Razer device - the laptop's own Dynamic Lighting keyboard, added here because it goes through
+            // the same RazerCanvasFeed as the others (only while its own effect is set to "Screen ambilight" -
+            // see LampArrayLogic.Process). Cols/Rows must match LampArrayLogic's GridWidth/GridHeight.
+            ("Laptop", "Laptop keyboard", 44, 16),
         };
 
         private void InitCanvas()
@@ -138,12 +142,14 @@ namespace Ambilight.GUI
             CanvasMousepadToggle.IsChecked = cfg.GetRazerCanvas("Mousepad").UseScreenPosition;
             CanvasHeadsetToggle.IsChecked = cfg.GetRazerCanvas("Headset").UseScreenPosition;
             CanvasKeypadToggle.IsChecked = cfg.GetRazerCanvas("Keypad").UseScreenPosition;
+            CanvasLaptopToggle.IsChecked = cfg.GetRazerCanvas("Laptop").UseScreenPosition;
 
             CanvasKeyboardGroup.SelectedIndex = cfg.GetRazerCanvas("Keyboard").RazerGroup;
             CanvasMouseGroup.SelectedIndex = cfg.GetRazerCanvas("Mouse").RazerGroup;
             CanvasMousepadGroup.SelectedIndex = cfg.GetRazerCanvas("Mousepad").RazerGroup;
             CanvasHeadsetGroup.SelectedIndex = cfg.GetRazerCanvas("Headset").RazerGroup;
             CanvasKeypadGroup.SelectedIndex = cfg.GetRazerCanvas("Keypad").RazerGroup;
+            CanvasLaptopGroup.SelectedIndex = cfg.GetRazerCanvas("Laptop").RazerGroup;
             _isLoading = false;
         }
 
@@ -158,7 +164,8 @@ namespace Ambilight.GUI
                 : toggle == CanvasMouseToggle ? "Mouse"
                 : toggle == CanvasMousepadToggle ? "Mousepad"
                 : toggle == CanvasHeadsetToggle ? "Headset"
-                : "Keypad";
+                : toggle == CanvasKeypadToggle ? "Keypad"
+                : "Laptop";
 
             cfg.GetRazerCanvas(device).UseScreenPosition = toggle.IsChecked == true;
             cfg.Save();
@@ -176,7 +183,8 @@ namespace Ambilight.GUI
                 : combo == CanvasMouseGroup ? "Mouse"
                 : combo == CanvasMousepadGroup ? "Mousepad"
                 : combo == CanvasHeadsetGroup ? "Headset"
-                : "Keypad";
+                : combo == CanvasKeypadGroup ? "Keypad"
+                : "Laptop";
 
             cfg.GetRazerCanvas(device).RazerGroup = combo.SelectedIndex;
             cfg.Save();

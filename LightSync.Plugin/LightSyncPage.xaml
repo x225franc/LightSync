@@ -20,12 +20,6 @@
         <StackPanel Grid.Column="0">
             <TextBlock Margin="0,0,0,16" FontSize="20" FontWeight="Medium" Text="LightSync" />
             <ListBox x:Name="_nav" BorderThickness="0" Background="Transparent" SelectionChanged="Nav_SelectionChanged">
-                <ListBoxItem Tag="General">
-                    <StackPanel Orientation="Horizontal">
-                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="Settings24" />
-                        <TextBlock Text="General" />
-                    </StackPanel>
-                </ListBoxItem>
                 <ListBoxItem Tag="Razer">
                     <StackPanel Orientation="Horizontal">
                         <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="Keyboard24" />
@@ -50,6 +44,18 @@
                         <TextBlock Text="Laptop keyboard" />
                     </StackPanel>
                 </ListBoxItem>
+                <ListBoxItem Tag="Capture">
+                    <StackPanel Orientation="Horizontal">
+                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="DesktopSignal24" />
+                        <TextBlock Text="Screen capture" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Tag="Settings">
+                    <StackPanel Orientation="Horizontal">
+                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="Settings24" />
+                        <TextBlock Text="Settings" />
+                    </StackPanel>
+                </ListBoxItem>
             </ListBox>
 
             <wpfui:CardControl Margin="0,16,0,0" Icon="Power24">
@@ -68,37 +74,12 @@
 
         <ScrollViewer Grid.Column="1" Margin="16,36,0,0" VerticalScrollBarVisibility="Auto">
             <Grid>
-                <!-- General -->
-                <StackPanel x:Name="_generalPanel">
-                    <wpfui:CardControl Margin="0,0,0,8" Icon="Options24">
-                        <wpfui:CardControl.Header>
-                            <TextBlock Text="Ultrawide monitor mode" />
-                        </wpfui:CardControl.Header>
-                        <wpfui:ToggleSwitch x:Name="_ultrawideToggle" Click="UltrawideToggle_Click" />
-                    </wpfui:CardControl>
-                    <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowDown24">
-                        <wpfui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Text="Real Ambilight mode" />
-                                <TextBlock
-                                    FontSize="11"
-                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                    Text="Every device samples the bottom edge of the screen only, like a real ambilight strip behind a monitor."
-                                    TextWrapping="Wrap" />
-                            </StackPanel>
-                        </wpfui:CardControl.Header>
-                        <wpfui:ToggleSwitch x:Name="_ambiToggle" Click="AmbiToggle_Click" />
-                    </wpfui:CardControl>
-                    <wpfui:CardControl Margin="0,0,0,8" Icon="WeatherMoon24">
-                        <wpfui:CardControl.Header>
-                            <TextBlock Text="Keep effects running during the screensaver" />
-                        </wpfui:CardControl.Header>
-                        <wpfui:ToggleSwitch x:Name="_screensaverToggle" Click="ScreensaverToggle_Click" />
-                    </wpfui:CardControl>
-
+                <!-- Screen capture -->
+                <StackPanel x:Name="_capturePanel" Visibility="Collapsed">
+                    <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Screen capture" />
                     <wpfui:CardControl Margin="0,0,0,8" Icon="TopSpeed24">
                         <wpfui:CardControl.Header>
-                            <TextBlock Text="Tickrate (updates/s)" />
+                            <TextBlock Text="Max FPS" />
                         </wpfui:CardControl.Header>
                         <StackPanel Orientation="Horizontal">
                             <Slider
@@ -134,14 +115,16 @@
                     </wpfui:CardControl>
                     <wpfui:CardControl Margin="0,0,0,8" Icon="BrightnessHigh24">
                         <wpfui:CardControl.Header>
-                            <TextBlock Text="Razer device brightness" />
+                            <TextBlock Text="Brightness of the devices and lights" />
                         </wpfui:CardControl.Header>
                         <StackPanel Orientation="Horizontal">
                             <Slider
                                 x:Name="_deviceBrightnessSlider"
                                 Width="200"
-                                Maximum="100"
-                                Minimum="1"
+                                Maximum="300"
+                                Minimum="10"
+                                TickFrequency="5"
+                                IsSnapToTickEnabled="True"
                                 ValueChanged="DeviceBrightnessSlider_ValueChanged" />
                             <TextBlock
                                 x:Name="_deviceBrightnessValue"
@@ -149,19 +132,6 @@
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center" />
                         </StackPanel>
-                    </wpfui:CardControl>
-                    <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowSync24">
-                        <wpfui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Text="Interpolate Chroma colors" />
-                                <TextBlock
-                                    FontSize="11"
-                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                    Text="Blends between Chroma frames so colors glide instead of stepping."
-                                    TextWrapping="Wrap" />
-                            </StackPanel>
-                        </wpfui:CardControl.Header>
-                        <wpfui:ToggleSwitch x:Name="_interpolateToggle" Click="InterpolateToggle_Click" />
                     </wpfui:CardControl>
                     <wpfui:CardControl Margin="0,0,0,8" Icon="DesktopSignal24">
                         <wpfui:CardControl.Header>
@@ -176,8 +146,49 @@
                         </wpfui:CardControl.Header>
                         <wpfui:Button x:Name="_identifyGroupsButton" Content="Show" Click="IdentifyGroupsButton_Click" />
                     </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowDown24">
+                        <wpfui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="'Real' Ambilight mode" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="Every device samples the bottom edge of the screen only, like a real ambilight strip behind a monitor."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_ambiToggle" Click="AmbiToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="WeatherMoon24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keep the effect during the screensaver" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_screensaverToggle" Click="ScreensaverToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Options24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Ultrawide monitor mode" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_ultrawideToggle" Click="UltrawideToggle_Click" />
+                    </wpfui:CardControl>
+                </StackPanel>
 
-                    <TextBlock Margin="0,16,0,8" FontSize="14" FontWeight="SemiBold" Text="Lights" />
+                <!-- Settings -->
+                <StackPanel x:Name="_settingsPanel" Visibility="Collapsed">
+                    <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Lights" />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowSync24">
+                        <wpfui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="Smooth transitions (interpolation)" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="Blends between Chroma frames so colors glide instead of stepping."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_interpolateToggle" Click="InterpolateToggle_Click" />
+                    </wpfui:CardControl>
                     <wpfui:CardControl Margin="0,0,0,8" Icon="Lightbulb24">
                         <wpfui:CardControl.Header>
                             <TextBlock Text="Yeelight: turn off in the dark" />
@@ -528,6 +539,13 @@
                             <TextBlock Text="Keypad" />
                         </wpfui:CardControl.Header>
                         <wpfui:ToggleSwitch x:Name="_canvasKeypadToggle" Click="CanvasDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,4" Icon="Keyboard24"
+                                       ToolTip="Only takes effect while the laptop keyboard's own effect (Laptop keyboard page) is set to Screen Ambilight.">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Laptop keyboard" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_canvasLaptopToggle" Click="CanvasDeviceToggle_Click" />
                     </wpfui:CardControl>
                 </StackPanel>
 

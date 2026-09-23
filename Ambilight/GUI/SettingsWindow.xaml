@@ -488,6 +488,21 @@
                         <ui:ToggleSwitch x:Name="CanvasKeypadToggle" Click="CanvasDeviceToggle_Click" />
                     </StackPanel>
                 </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Laptop keyboard">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="DesktopKeyboard24" />
+                    </ui:CardControl.Icon>
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="CanvasLaptopGroup" Width="130" Margin="0,0,12,0" SelectionChanged="CanvasDeviceGroup_SelectionChanged">
+                            <ComboBoxItem Content="Default" />
+                            <ComboBoxItem Content="Group 1" />
+                            <ComboBoxItem Content="Group 2" />
+                            <ComboBoxItem Content="Group 3" />
+                            <ComboBoxItem Content="Group 4" />
+                        </ComboBox>
+                        <ui:ToggleSwitch x:Name="CanvasLaptopToggle" Click="CanvasDeviceToggle_Click" />
+                    </StackPanel>
+                </ui:CardControl>
 
                     </StackPanel>
                 </ScrollViewer>

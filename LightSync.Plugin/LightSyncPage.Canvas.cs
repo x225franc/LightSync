@@ -33,6 +33,10 @@ public partial class LightSyncPage
         ("Mousepad", "Mousepad", Colore.Effects.Mousepad.MousepadConstants.MaxLeds, 1),
         ("Headset", "Headset", 2, 1),
         ("Keypad", "Keypad", Colore.Effects.Keypad.KeypadConstants.MaxColumns, Colore.Effects.Keypad.KeypadConstants.MaxRows),
+        // Not a Razer device - the laptop's own Dynamic Lighting keyboard, added here because it goes through the
+        // same RazerCanvasFeed as the others (only while its own effect is set to "Screen Ambilight" - see
+        // LampArrayLogic.Process). Cols/Rows must match LampArrayLogic's GridWidth/GridHeight.
+        ("Laptop", "Laptop keyboard", 44, 16),
     };
 
     private sealed class CanvasEntry
@@ -65,6 +69,7 @@ public partial class LightSyncPage
         _canvasMousepadToggle.IsChecked = cfg.GetRazerCanvas("Mousepad").UseScreenPosition;
         _canvasHeadsetToggle.IsChecked = cfg.GetRazerCanvas("Headset").UseScreenPosition;
         _canvasKeypadToggle.IsChecked = cfg.GetRazerCanvas("Keypad").UseScreenPosition;
+        _canvasLaptopToggle.IsChecked = cfg.GetRazerCanvas("Laptop").UseScreenPosition;
     }
 
     private void CanvasDeviceToggle_Click(object sender, RoutedEventArgs e)
@@ -79,7 +84,8 @@ public partial class LightSyncPage
             : toggle == _canvasMouseToggle ? "Mouse"
             : toggle == _canvasMousepadToggle ? "Mousepad"
             : toggle == _canvasHeadsetToggle ? "Headset"
-            : "Keypad";
+            : toggle == _canvasKeypadToggle ? "Keypad"
+            : "Laptop";
 
         cfg.GetRazerCanvas(device).UseScreenPosition = toggle.IsChecked == true;
         cfg.Save();

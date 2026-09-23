@@ -105,19 +105,21 @@ public partial class LightSyncPage : UiPage
         if (_nav.SelectedItem is not ListBoxItem item)
             return;
 
-        _generalPanel.Visibility = Visibility.Collapsed;
         _razerPanel.Visibility = Visibility.Collapsed;
         _lightsPanel.Visibility = Visibility.Collapsed;
         _canvasPanel.Visibility = Visibility.Collapsed;
         _laptopPanel.Visibility = Visibility.Collapsed;
+        _capturePanel.Visibility = Visibility.Collapsed;
+        _settingsPanel.Visibility = Visibility.Collapsed;
 
         switch (item.Tag as string)
         {
-            case "General": _generalPanel.Visibility = Visibility.Visible; UpdateStatus(); break;
             case "Razer": _razerPanel.Visibility = Visibility.Visible; break;
             case "Lights": _lightsPanel.Visibility = Visibility.Visible; UpdateChromaStatus(); RefreshBulbList(force: true); break;
             case "Canvas": _canvasPanel.Visibility = Visibility.Visible; SyncCanvas(); break;
             case "Laptop": _laptopPanel.Visibility = Visibility.Visible; UpdateStatus(); break;
+            case "Capture": _capturePanel.Visibility = Visibility.Visible; break;
+            case "Settings": _settingsPanel.Visibility = Visibility.Visible; UpdateStatus(); break;
         }
     }
 
