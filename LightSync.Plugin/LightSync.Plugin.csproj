@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<!-- This is a class library, not an app, so package DLLs are not copied to the output folder by default -
+		     but the plugin needs them physically present (in Plugins\Dependency) since Toolkit's loader resolves
+		     assemblies itself rather than through this project's .deps.json. -->
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<AssemblyName>LightSync.Plugin</AssemblyName>
+		<RootNamespace>LightSync.Plugin</RootNamespace>
+		<NoWarn>CA1416;CA2255</NoWarn>
+
+		<!-- This DLL is loaded into Toolkit's own process (see LenovoLegionToolkit-Team/LenovoLegionToolkit-Plugins) -
+		     it must never bring its own copy of LenovoLegionToolkit.Lib, WPF-UI or Newtonsoft.Json, since the host
+		     process already has one loaded and a second, differently-versioned copy would break type identity
+		     (IExtensionProvider from "our" Lib.dll would not be the same type as the host's IExtensionProvider). -->
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- UseWindowsForms's implicit global "using System.Windows.Forms;" collides with System.Threading.Timer in
+		     the ported engine code (which predates implicit usings entirely) - only ColorDialog needs WinForms here. -->
+		<Using Remove="System.Windows.Forms" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\LenovoLegionToolkit\LenovoLegionToolkit.Lib\LenovoLegionToolkit.Lib.csproj">
+			<Private>false</Private>
+			<ExcludeAssets>runtime</ExcludeAssets>
+		</ProjectReference>
+		<PackageReference Include="WPF-UI" Version="2.1.0">
+			<Private>false</Private>
+			<ExcludeAssets>runtime</ExcludeAssets>
+		</PackageReference>
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4">
+			<Private>false</Private>
+			<ExcludeAssets>runtime</ExcludeAssets>
+		</PackageReference>
+
+		<!-- These are NOT provided by the host, so they deploy normally (into Plugins\Dependency, see redeploy) -->
+		<PackageReference Include="Colore" Version="6.0.0" />
+		<PackageReference Include="PixiEditor.ColorPicker" Version="3.4.2.2" />
+		<PackageReference Include="morelinq" Version="4.4.0" />
+		<PackageReference Include="SharpDX" Version="4.2.0" />
+		<PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
+		<PackageReference Include="SharpDX.DXGI" Version="4.2.0" />
+		<PackageReference Include="System.Reactive" Version="6.0.1" />
+	</ItemGroup>
+
+</Project>

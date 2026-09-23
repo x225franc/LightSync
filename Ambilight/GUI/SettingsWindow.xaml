@@ -411,35 +411,82 @@
                            Text="Nothing is on the canvas yet." />
 
                 <TextBlock Text="Razer devices on the canvas" FontSize="14" FontWeight="SemiBold" Margin="0,4,0,8" />
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="Each device can either follow its canvas position above, or a Chroma group instead - the same 4 zones a Yeelight/Govee light can be assigned to on the Lights page. Picking a group here turns the canvas box off for that device and paints it that zone's color instead, so it can be mapped to wherever that zone really sits in your setup." />
                 <ui:CardControl Margin="0,0,0,4" Header="Keyboard">
                     <ui:CardControl.Icon>
                         <ui:SymbolIcon Symbol="Keyboard24" />
                     </ui:CardControl.Icon>
-                    <ui:ToggleSwitch x:Name="CanvasKeyboardToggle" Click="CanvasDeviceToggle_Click" />
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="CanvasKeyboardGroup" Width="130" Margin="0,0,12,0" SelectionChanged="CanvasDeviceGroup_SelectionChanged">
+                            <ComboBoxItem Content="Default" />
+                            <ComboBoxItem Content="Group 1" />
+                            <ComboBoxItem Content="Group 2" />
+                            <ComboBoxItem Content="Group 3" />
+                            <ComboBoxItem Content="Group 4" />
+                        </ComboBox>
+                        <ui:ToggleSwitch x:Name="CanvasKeyboardToggle" Click="CanvasDeviceToggle_Click" />
+                    </StackPanel>
                 </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Header="Mouse">
                     <ui:CardControl.Icon>
                         <ui:SymbolIcon Symbol="Cursor24" />
                     </ui:CardControl.Icon>
-                    <ui:ToggleSwitch x:Name="CanvasMouseToggle" Click="CanvasDeviceToggle_Click" />
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="CanvasMouseGroup" Width="130" Margin="0,0,12,0" SelectionChanged="CanvasDeviceGroup_SelectionChanged">
+                            <ComboBoxItem Content="Default" />
+                            <ComboBoxItem Content="Group 1" />
+                            <ComboBoxItem Content="Group 2" />
+                            <ComboBoxItem Content="Group 3" />
+                            <ComboBoxItem Content="Group 4" />
+                        </ComboBox>
+                        <ui:ToggleSwitch x:Name="CanvasMouseToggle" Click="CanvasDeviceToggle_Click" />
+                    </StackPanel>
                 </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Header="Mousepad">
                     <ui:CardControl.Icon>
                         <ui:SymbolIcon Symbol="Grid24" />
                     </ui:CardControl.Icon>
-                    <ui:ToggleSwitch x:Name="CanvasMousepadToggle" Click="CanvasDeviceToggle_Click" />
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="CanvasMousepadGroup" Width="130" Margin="0,0,12,0" SelectionChanged="CanvasDeviceGroup_SelectionChanged">
+                            <ComboBoxItem Content="Default" />
+                            <ComboBoxItem Content="Group 1" />
+                            <ComboBoxItem Content="Group 2" />
+                            <ComboBoxItem Content="Group 3" />
+                            <ComboBoxItem Content="Group 4" />
+                        </ComboBox>
+                        <ui:ToggleSwitch x:Name="CanvasMousepadToggle" Click="CanvasDeviceToggle_Click" />
+                    </StackPanel>
                 </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Header="Headset">
                     <ui:CardControl.Icon>
                         <ui:SymbolIcon Symbol="Headset24" />
                     </ui:CardControl.Icon>
-                    <ui:ToggleSwitch x:Name="CanvasHeadsetToggle" Click="CanvasDeviceToggle_Click" />
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="CanvasHeadsetGroup" Width="130" Margin="0,0,12,0" SelectionChanged="CanvasDeviceGroup_SelectionChanged">
+                            <ComboBoxItem Content="Default" />
+                            <ComboBoxItem Content="Group 1" />
+                            <ComboBoxItem Content="Group 2" />
+                            <ComboBoxItem Content="Group 3" />
+                            <ComboBoxItem Content="Group 4" />
+                        </ComboBox>
+                        <ui:ToggleSwitch x:Name="CanvasHeadsetToggle" Click="CanvasDeviceToggle_Click" />
+                    </StackPanel>
                 </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Header="Keypad">
                     <ui:CardControl.Icon>
                         <ui:SymbolIcon Symbol="NumberSymbolSquare24" />
                     </ui:CardControl.Icon>
-                    <ui:ToggleSwitch x:Name="CanvasKeypadToggle" Click="CanvasDeviceToggle_Click" />
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="CanvasKeypadGroup" Width="130" Margin="0,0,12,0" SelectionChanged="CanvasDeviceGroup_SelectionChanged">
+                            <ComboBoxItem Content="Default" />
+                            <ComboBoxItem Content="Group 1" />
+                            <ComboBoxItem Content="Group 2" />
+                            <ComboBoxItem Content="Group 3" />
+                            <ComboBoxItem Content="Group 4" />
+                        </ComboBox>
+                        <ui:ToggleSwitch x:Name="CanvasKeypadToggle" Click="CanvasDeviceToggle_Click" />
+                    </StackPanel>
                 </ui:CardControl>
 
                     </StackPanel>

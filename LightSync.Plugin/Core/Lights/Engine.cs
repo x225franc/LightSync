@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -499,8 +500,17 @@ namespace Ambilight.Lights
                 // Start from the brightness the device has now, so adding it does not suddenly change it.
                 Task.Run(() =>
                 {
-                    var st = _govee.QueryStatus(s.Ip, s.Local, 2000);
-                    if (st != null) { state.Config.Brightness = Math.Max(1, Math.Min(100, st.Brightness)); ScheduleSave(); }
+                    try
+                    {
+                        var st = _govee.QueryStatus(s.Ip, s.Local, 2000);
+                        if (st != null) { state.Config.Brightness = Math.Max(1, Math.Min(100, st.Brightness)); ScheduleSave(); }
+                    }
+                    catch (Exception e)
+                    {
+                        // Fire-and-forget: an unguarded exception here would otherwise surface much later (and
+                        // confusingly) via the finalizer thread once this Task is garbage collected unobserved.
+                        Log.Warn("Could not query initial status for Govee " + s.Ip + ": " + e.Message);
+                    }
                 });
             }
         }
@@ -769,11 +779,20 @@ namespace Ambilight.Lights
             string ip = b.Ip; var local = b.LocalIp; int last = b.LastStreamRgb;
             return Task.Run(() =>
             {
-                _govee.RazerMode(ip, local, false);
-                if (last >= 0)
+                try
                 {
-                    Thread.Sleep(450);          // the device drops commands that follow each other too closely
-                    _govee.Color(ip, local, last);
+                    _govee.RazerMode(ip, local, false);
+                    if (last >= 0)
+                    {
+                        Thread.Sleep(450);          // the device drops commands that follow each other too closely
+                        _govee.Color(ip, local, last);
+                    }
+                }
+                catch (Exception e)
+                {
+                    // The main call site (Tick) discards this Task fire-and-forget - an unguarded exception here
+                    // would otherwise surface much later (and confusingly) via the finalizer thread instead.
+                    Log.Warn("Could not release Govee stream mode for " + ip + ": " + e.Message);
                 }
             });
         }

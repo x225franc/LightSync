@@ -1,0 +1,674 @@
+<wpfui:UiPage
+    x:Class="LightSync.Plugin.LightSyncPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:cp="clr-namespace:ColorPicker;assembly=ColorPicker"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:wpfui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="LightSync"
+    d:DesignHeight="700"
+    d:DesignWidth="900"
+    mc:Ignorable="d">
+
+    <Grid Margin="0,16,8,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="170" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0">
+            <TextBlock Margin="0,0,0,16" FontSize="20" FontWeight="Medium" Text="LightSync" />
+            <ListBox x:Name="_nav" BorderThickness="0" Background="Transparent" SelectionChanged="Nav_SelectionChanged">
+                <ListBoxItem Tag="General">
+                    <StackPanel Orientation="Horizontal">
+                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="Settings24" />
+                        <TextBlock Text="General" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Tag="Razer">
+                    <StackPanel Orientation="Horizontal">
+                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="Keyboard24" />
+                        <TextBlock Text="Razer devices" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Tag="Lights">
+                    <StackPanel Orientation="Horizontal">
+                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="Lightbulb24" />
+                        <TextBlock Text="Lights" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Tag="Canvas">
+                    <StackPanel Orientation="Horizontal">
+                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="DesktopSignal24" />
+                        <TextBlock Text="Canvas" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Tag="Laptop">
+                    <StackPanel Orientation="Horizontal">
+                        <wpfui:SymbolIcon Margin="0,0,8,0" Symbol="Keyboard24" />
+                        <TextBlock Text="Laptop keyboard" />
+                    </StackPanel>
+                </ListBoxItem>
+            </ListBox>
+
+            <wpfui:CardControl Margin="0,16,0,0" Icon="Power24">
+                <wpfui:CardControl.Header>
+                    <TextBlock Text="Enabled" />
+                </wpfui:CardControl.Header>
+                <wpfui:ToggleSwitch x:Name="_masterEnabledToggle" Click="MasterEnabledToggle_Click" />
+            </wpfui:CardControl>
+            <wpfui:Button
+                Margin="0,8,0,0"
+                HorizontalAlignment="Stretch"
+                Click="RestartButton_Click"
+                Content="Restart"
+                Icon="ArrowSync24" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Column="1" Margin="16,36,0,0" VerticalScrollBarVisibility="Auto">
+            <Grid>
+                <!-- General -->
+                <StackPanel x:Name="_generalPanel">
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Options24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Ultrawide monitor mode" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_ultrawideToggle" Click="UltrawideToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowDown24">
+                        <wpfui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="Real Ambilight mode" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="Every device samples the bottom edge of the screen only, like a real ambilight strip behind a monitor."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_ambiToggle" Click="AmbiToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="WeatherMoon24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keep effects running during the screensaver" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_screensaverToggle" Click="ScreensaverToggle_Click" />
+                    </wpfui:CardControl>
+
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="TopSpeed24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Tickrate (updates/s)" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_tickrateSlider"
+                                Width="200"
+                                Maximum="60"
+                                Minimum="10"
+                                ValueChanged="TickrateSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_tickrateValue"
+                                Width="40"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="ColorFill24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Saturation" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_saturationSlider"
+                                Width="200"
+                                Maximum="200"
+                                Minimum="0"
+                                ValueChanged="SaturationSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_saturationValue"
+                                Width="40"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="BrightnessHigh24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Razer device brightness" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_deviceBrightnessSlider"
+                                Width="200"
+                                Maximum="100"
+                                Minimum="1"
+                                ValueChanged="DeviceBrightnessSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_deviceBrightnessValue"
+                                Width="40"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowSync24">
+                        <wpfui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="Interpolate Chroma colors" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="Blends between Chroma frames so colors glide instead of stepping."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_interpolateToggle" Click="InterpolateToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="DesktopSignal24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Monitor to capture" />
+                        </wpfui:CardControl.Header>
+                        <ComboBox x:Name="_monitorCombo" Width="200" SelectionChanged="MonitorCombo_SelectionChanged" />
+                    </wpfui:CardControl>
+
+                    <TextBlock Margin="0,16,0,8" FontSize="14" FontWeight="SemiBold" Text="Lights" />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Lightbulb24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Yeelight: turn off in the dark" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_yeelightOffBelowSlider"
+                                Width="200"
+                                Maximum="25"
+                                Minimum="0"
+                                ValueChanged="YeelightOffBelowSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_yeelightOffBelowValue"
+                                Width="90"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Lightbulb24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Yeelight: fade out before turning off" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_yeelightFadeMsSlider"
+                                Width="200"
+                                Maximum="1500"
+                                Minimum="0"
+                                ValueChanged="YeelightFadeMsSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_yeelightFadeMsValue"
+                                Width="60"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="TopSpeed24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Govee update rate (frames per second)" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_goveeFpsSlider"
+                                Width="200"
+                                Maximum="30"
+                                Minimum="1"
+                                ValueChanged="GoveeFpsSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_goveeFpsValue"
+                                Width="50"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="TopSpeed24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Yeelight update rate (frames per second)" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_yeelightFpsSlider"
+                                Width="200"
+                                Maximum="30"
+                                Minimum="1"
+                                ValueChanged="YeelightFpsSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_yeelightFpsValue"
+                                Width="50"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+
+                    <TextBlock Margin="0,16,0,8" FontSize="14" FontWeight="SemiBold" Text="Maintenance" />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="DocumentText24">
+                        <wpfui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="LightSync log file" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="Everything this plugin logs (Yeelight/Govee, Chroma, laptop keyboard, screen capture)."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <wpfui:Button Margin="0,0,8,0" Click="OpenLogButton_Click" Content="Open log" Icon="DocumentText24" />
+                            <wpfui:Button Click="OpenLogFolderButton_Click" Content="Open folder" Icon="Folder24" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="PulseSquare20">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Diagnostics" />
+                        </wpfui:CardControl.Header>
+                        <TextBlock x:Name="_diagnosticsText" HorizontalAlignment="Right" TextAlignment="Right" TextWrapping="Wrap" Width="260" />
+                    </wpfui:CardControl>
+                </StackPanel>
+
+                <!-- Razer devices -->
+                <StackPanel x:Name="_razerPanel" Visibility="Collapsed">
+                    <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Razer devices" />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Keyboard24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keyboard" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_keyboardToggle" Click="RazerDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Cursor24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Mouse" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_mouseToggle" Click="RazerDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Grid24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Mousepad" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_padToggle" Click="RazerDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Headset24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Headset" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_headsetToggle" Click="RazerDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="NumberSymbolSquare24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keypad" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_keypadToggle" Click="RazerDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Link24">
+                        <wpfui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="Chroma Link" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="Drives whatever Yeelight/Govee lights are assigned to a Chroma group, via Chroma Connect."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_linkToggle" Click="RazerDeviceToggle_Click" />
+                    </wpfui:CardControl>
+
+                    <TextBlock Margin="0,16,0,8" FontSize="14" FontWeight="SemiBold" Text="Keyboard grid size" />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Grid24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keyboard grid width" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_kbWidthSlider"
+                                Width="200"
+                                Maximum="34"
+                                Minimum="10"
+                                ValueChanged="KeyboardWidthSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_kbWidthValue"
+                                Width="40"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Grid24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keyboard grid height" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_kbHeightSlider"
+                                Width="200"
+                                Maximum="8"
+                                Minimum="3"
+                                ValueChanged="KeyboardHeightSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_kbHeightValue"
+                                Width="40"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                </StackPanel>
+
+                <!-- Lights -->
+                <StackPanel x:Name="_lightsPanel" Visibility="Collapsed">
+                    <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Light control" />
+                    <wpfui:CardControl Margin="0,0,0,16" Icon="Lightbulb24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Control the lights with Razer Chroma" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_lightsMasterToggle" Click="LightsMasterToggle_Click" />
+                    </wpfui:CardControl>
+
+                    <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Razer Chroma Connect" />
+                    <wpfui:CardControl Margin="0,0,0,4" Icon="Sparkle24">
+                        <wpfui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock x:Name="_chromaStatusText" Text="Receiving Chroma colors" />
+                                <TextBlock
+                                    x:Name="_scanStatusText"
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="Searching for devices on all network adapters..."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </wpfui:CardControl.Header>
+                        <wpfui:Button Click="RescanButton_Click" Content="Search again" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,16" Icon="Lightbulb24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Test which physical light is which group" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:Button x:Name="_colorTestButton" Click="ColorTestButton_Click" Content="Start test" />
+                    </wpfui:CardControl>
+
+                    <StackPanel x:Name="_firewallBanner" Margin="0,0,0,8" Visibility="Collapsed">
+                        <wpfui:CardControl Icon="ShieldError24">
+                            <wpfui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Windows Firewall may be blocking Yeelight" />
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                        Text="A Yeelight bulb in music mode connects back to this PC - without an inbound allow rule, it silently fails to."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </wpfui:CardControl.Header>
+                            <wpfui:Button Click="AddFirewallRuleButton_Click" Content="Add rule" />
+                        </wpfui:CardControl>
+                    </StackPanel>
+                    <StackPanel x:Name="_yeelightConflictBanner" Margin="0,0,0,8" Visibility="Collapsed">
+                        <wpfui:CardControl Icon="Warning24">
+                            <wpfui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Yeelight Chroma Connector is running" />
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                        Text="Two apps driving the same bulbs will fight over them."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </wpfui:CardControl.Header>
+                            <wpfui:Button Click="DisableYeelightButton_Click" Content="Disable" />
+                        </wpfui:CardControl>
+                    </StackPanel>
+                    <StackPanel x:Name="_goveeConflictBanner" Margin="0,0,0,8" Visibility="Collapsed">
+                        <wpfui:CardControl Icon="Warning24">
+                            <wpfui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Govee Desktop is running" />
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                        Text="Two apps driving the same devices will fight over them."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </wpfui:CardControl.Header>
+                            <wpfui:Button Click="DisableGoveeButton_Click" Content="Disable" />
+                        </wpfui:CardControl>
+                    </StackPanel>
+                    <StackPanel x:Name="_lightConnectBanner" Margin="0,0,0,8" Visibility="Collapsed">
+                        <wpfui:CardControl Icon="Warning24">
+                            <wpfui:CardControl.Header>
+                                <TextBlock Text="Light Connect is running" />
+                            </wpfui:CardControl.Header>
+                            <wpfui:Button Click="DisableLightConnectButton_Click" Content="Disable" />
+                        </wpfui:CardControl>
+                    </StackPanel>
+                    <StackPanel x:Name="_restoreAppsBanner" Margin="0,0,0,16" Visibility="Collapsed">
+                        <wpfui:CardControl Icon="ArrowUndo24">
+                            <wpfui:CardControl.Header>
+                                <TextBlock Text="Restore the apps LightSync took over" />
+                            </wpfui:CardControl.Header>
+                            <wpfui:Button Click="RestoreAppsButton_Click" Content="Restore" />
+                        </wpfui:CardControl>
+                    </StackPanel>
+
+                    <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Devices" />
+                    <ItemsControl x:Name="_bulbList" />
+                </StackPanel>
+
+                <!-- Canvas -->
+                <StackPanel x:Name="_canvasPanel" Visibility="Collapsed">
+                    <TextBlock
+                        Margin="0,0,0,12"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Text="Drag a device to where it really sits around your screen, and drag its bottom-right corner to resize the area it should reflect. This bypasses Chroma Connect's 4-zone limit entirely - assign a device here instead of a Chroma group to use it."
+                        TextWrapping="Wrap" />
+                    <Border
+                        x:Name="_canvasBorder"
+                        Width="480"
+                        Height="270"
+                        HorizontalAlignment="Left"
+                        Background="#FF101010"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <Canvas x:Name="_positionCanvas" ClipToBounds="True" />
+                    </Border>
+                    <TextBlock
+                        x:Name="_canvasHintText"
+                        Margin="0,8,0,16"
+                        FontSize="12"
+                        Opacity="0.7"
+                        Text="Nothing is on the canvas yet."
+                        TextWrapping="Wrap" />
+
+                    <TextBlock Margin="0,4,0,8" FontSize="14" FontWeight="SemiBold" Text="Razer devices on the canvas" />
+                    <wpfui:CardControl Margin="0,0,0,4" Icon="Keyboard24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keyboard" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_canvasKeyboardToggle" Click="CanvasDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,4" Icon="Cursor24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Mouse" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_canvasMouseToggle" Click="CanvasDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,4" Icon="Grid24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Mousepad" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_canvasMousepadToggle" Click="CanvasDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,4" Icon="Headset24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Headset" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_canvasHeadsetToggle" Click="CanvasDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,4" Icon="NumberSymbolSquare24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Keypad" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_canvasKeypadToggle" Click="CanvasDeviceToggle_Click" />
+                    </wpfui:CardControl>
+                </StackPanel>
+
+                <!-- Laptop keyboard -->
+                <StackPanel x:Name="_laptopPanel" Visibility="Collapsed">
+                    <TextBlock Margin="0,0,0,12" FontSize="14" FontWeight="SemiBold" Text="Laptop keyboard (Windows Dynamic Lighting)" />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Power24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Enabled" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_laptopEnabledToggle" Click="LaptopEnabledToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="ColorFill24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Effect" />
+                        </wpfui:CardControl.Header>
+                        <ComboBox x:Name="_laptopEffectCombo" Width="200" SelectionChanged="LaptopEffectCombo_SelectionChanged">
+                            <ComboBoxItem Content="Screen Ambilight" />
+                            <ComboBoxItem Content="Solid Color" />
+                            <ComboBoxItem Content="Breathing" />
+                            <ComboBoxItem Content="Rainbow Wave" />
+                            <ComboBoxItem Content="Color Cycle" />
+                            <ComboBoxItem Content="Rainbow Wheel" />
+                        </ComboBox>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="BrightnessHigh24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Brightness" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_laptopBrightnessSlider"
+                                Width="200"
+                                Maximum="100"
+                                Minimum="1"
+                                ValueChanged="LaptopBrightnessSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_laptopBrightnessValue"
+                                Width="40"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl x:Name="_laptopColorCard" Margin="0,0,0,8" Icon="ColorBackground24" Visibility="Collapsed">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Color" />
+                        </wpfui:CardControl.Header>
+                        <Border
+                            x:Name="_laptopColorSwatch"
+                            Width="60"
+                            Height="24"
+                            Background="Red"
+                            CornerRadius="4"
+                            Cursor="Hand"
+                            MouseLeftButtonUp="LaptopColorSwatch_Click">
+                            <Popup
+                                x:Name="_laptopColorPopup"
+                                Width="250"
+                                AllowsTransparency="True"
+                                Placement="Bottom"
+                                StaysOpen="False">
+                                <Border
+                                    Background="{DynamicResource ApplicationBackgroundBrush}"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                    <StackPanel Margin="16">
+                                        <cp:SquarePicker
+                                            x:Name="_laptopColorSquarePicker"
+                                            Width="200"
+                                            Height="200"
+                                            ColorChanged="LaptopSquarePicker_ColorChanged" />
+                                        <Grid Margin="0,16,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,12,8" VerticalAlignment="Center" Text="#" />
+                                            <TextBox
+                                                x:Name="_laptopHexBox"
+                                                Grid.Row="0"
+                                                Grid.Column="1"
+                                                Margin="0,0,0,8"
+                                                LostFocus="LaptopHexBox_LostFocus" />
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,12,8" VerticalAlignment="Center" Text="R" />
+                                            <Slider
+                                                x:Name="_laptopRedSlider"
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="0,0,0,8"
+                                                Maximum="255"
+                                                Minimum="0"
+                                                ValueChanged="LaptopRgbSlider_ValueChanged" />
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,12,8" VerticalAlignment="Center" Text="G" />
+                                            <Slider
+                                                x:Name="_laptopGreenSlider"
+                                                Grid.Row="2"
+                                                Grid.Column="1"
+                                                Margin="0,0,0,8"
+                                                Maximum="255"
+                                                Minimum="0"
+                                                ValueChanged="LaptopRgbSlider_ValueChanged" />
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" Text="B" />
+                                            <Slider
+                                                x:Name="_laptopBlueSlider"
+                                                Grid.Row="3"
+                                                Grid.Column="1"
+                                                Maximum="255"
+                                                Minimum="0"
+                                                ValueChanged="LaptopRgbSlider_ValueChanged" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </Border>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl x:Name="_laptopReverseCard" Margin="0,0,0,8" Icon="ArrowRepeatAll24" Visibility="Collapsed">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Reverse direction" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_laptopReverseToggle" Click="LaptopReverseToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl x:Name="_laptopSpeedCard" Margin="0,0,0,8" Icon="TopSpeed24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Speed" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider
+                                x:Name="_laptopSpeedSlider"
+                                Width="200"
+                                Maximum="100"
+                                Minimum="0"
+                                ValueChanged="LaptopSpeedSlider_ValueChanged" />
+                            <TextBlock
+                                x:Name="_laptopSpeedValue"
+                                Width="40"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="PulseSquare20">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Status" />
+                        </wpfui:CardControl.Header>
+                        <TextBlock x:Name="_laptopStatus" HorizontalAlignment="Right" TextAlignment="Right" TextWrapping="Wrap" Width="260" />
+                    </wpfui:CardControl>
+                    <TextBlock
+                        Margin="0,4,0,0"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        FontSize="11"
+                        Text="Registering as a Dynamic Lighting app is handled by Lenovo Legion Toolkit itself (it already appears in Settings &gt; Personalization &gt; Dynamic Lighting), so there is no separate one-time setup needed here."
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</wpfui:UiPage>

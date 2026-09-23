@@ -138,6 +138,12 @@ namespace Ambilight.GUI
             CanvasMousepadToggle.IsChecked = cfg.GetRazerCanvas("Mousepad").UseScreenPosition;
             CanvasHeadsetToggle.IsChecked = cfg.GetRazerCanvas("Headset").UseScreenPosition;
             CanvasKeypadToggle.IsChecked = cfg.GetRazerCanvas("Keypad").UseScreenPosition;
+
+            CanvasKeyboardGroup.SelectedIndex = cfg.GetRazerCanvas("Keyboard").RazerGroup;
+            CanvasMouseGroup.SelectedIndex = cfg.GetRazerCanvas("Mouse").RazerGroup;
+            CanvasMousepadGroup.SelectedIndex = cfg.GetRazerCanvas("Mousepad").RazerGroup;
+            CanvasHeadsetGroup.SelectedIndex = cfg.GetRazerCanvas("Headset").RazerGroup;
+            CanvasKeypadGroup.SelectedIndex = cfg.GetRazerCanvas("Keypad").RazerGroup;
             _isLoading = false;
         }
 
@@ -157,6 +163,23 @@ namespace Ambilight.GUI
             cfg.GetRazerCanvas(device).UseScreenPosition = toggle.IsChecked == true;
             cfg.Save();
             SyncCanvas();
+        }
+
+        private void CanvasDeviceGroup_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var cfg = LightsService.Config;
+            if (cfg == null) return;
+
+            var combo = (ComboBox)sender;
+            string device = combo == CanvasKeyboardGroup ? "Keyboard"
+                : combo == CanvasMouseGroup ? "Mouse"
+                : combo == CanvasMousepadGroup ? "Mousepad"
+                : combo == CanvasHeadsetGroup ? "Headset"
+                : "Keypad";
+
+            cfg.GetRazerCanvas(device).RazerGroup = combo.SelectedIndex;
+            cfg.Save();
         }
 
         // ---- shared canvas rendering ----
