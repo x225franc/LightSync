@@ -2,7 +2,7 @@
     x:Class="LightSync.Plugin.LightSyncPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:cp="clr-namespace:ColorPicker;assembly=ColorPicker"
+    xmlns:gui="clr-namespace:Ambilight.GUI"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:wpfui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -169,6 +169,13 @@
                         </wpfui:CardControl.Header>
                         <ComboBox x:Name="_monitorCombo" Width="200" SelectionChanged="MonitorCombo_SelectionChanged" />
                     </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Grid24"
+                                       ToolTip="Shows, for a few seconds, where Group 1..4 actually sit on the captured screen - like Windows' own monitor Identify.">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Identify groups" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:Button x:Name="_identifyGroupsButton" Content="Show" Click="IdentifyGroupsButton_Click" />
+                    </wpfui:CardControl>
 
                     <TextBlock Margin="0,16,0,8" FontSize="14" FontWeight="SemiBold" Text="Lights" />
                     <wpfui:CardControl Margin="0,0,0,8" Icon="Lightbulb24">
@@ -233,7 +240,7 @@
                             <Slider
                                 x:Name="_yeelightFpsSlider"
                                 Width="200"
-                                Maximum="30"
+                                Maximum="10"
                                 Minimum="1"
                                 ValueChanged="YeelightFpsSlider_ValueChanged" />
                             <TextBlock
@@ -384,7 +391,14 @@
                         <wpfui:CardControl.Header>
                             <TextBlock Text="Test which physical light is which group" />
                         </wpfui:CardControl.Header>
-                        <wpfui:Button x:Name="_colorTestButton" Click="ColorTestButton_Click" Content="Start test" />
+                        <StackPanel Orientation="Horizontal">
+                            <wpfui:Button x:Name="_colorTestButton" Click="ColorTestButton_Click" Content="Start test" />
+                            <TextBlock
+                                x:Name="_colorTestStatusText"
+                                Margin="12,0,0,0"
+                                VerticalAlignment="Center"
+                                Opacity="0.8" />
+                        </StackPanel>
                     </wpfui:CardControl>
 
                     <StackPanel x:Name="_firewallBanner" Margin="0,0,0,8" Visibility="Collapsed">
@@ -460,17 +474,22 @@
                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                         Text="Drag a device to where it really sits around your screen, and drag its bottom-right corner to resize the area it should reflect. This bypasses Chroma Connect's 4-zone limit entirely - assign a device here instead of a Chroma group to use it."
                         TextWrapping="Wrap" />
-                    <Border
-                        x:Name="_canvasBorder"
-                        Width="480"
-                        Height="270"
-                        HorizontalAlignment="Left"
-                        Background="#FF101010"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4">
-                        <Canvas x:Name="_positionCanvas" ClipToBounds="True" />
-                    </Border>
+                    <Grid
+                        x:Name="_canvasScaleHost"
+                        HorizontalAlignment="Stretch"
+                        SizeChanged="CanvasScaleHost_SizeChanged">
+                        <Border
+                            x:Name="_canvasBorder"
+                            Width="480"
+                            Height="270"
+                            HorizontalAlignment="Left"
+                            Background="#FF101010"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                            <Canvas x:Name="_positionCanvas" ClipToBounds="True" />
+                        </Border>
+                    </Grid>
                     <TextBlock
                         x:Name="_canvasHintText"
                         Margin="0,8,0,16"
@@ -529,8 +548,8 @@
                             <ComboBoxItem Content="Screen Ambilight" />
                             <ComboBoxItem Content="Solid Color" />
                             <ComboBoxItem Content="Breathing" />
-                            <ComboBoxItem Content="Rainbow Wave" />
                             <ComboBoxItem Content="Color Cycle" />
+                            <ComboBoxItem Content="Rainbow Wave" />
                             <ComboBoxItem Content="Rainbow Wheel" />
                         </ComboBox>
                     </wpfui:CardControl>
@@ -556,80 +575,51 @@
                         <wpfui:CardControl.Header>
                             <TextBlock Text="Color" />
                         </wpfui:CardControl.Header>
-                        <Border
-                            x:Name="_laptopColorSwatch"
-                            Width="60"
-                            Height="24"
-                            Background="Red"
-                            CornerRadius="4"
-                            Cursor="Hand"
-                            MouseLeftButtonUp="LaptopColorSwatch_Click">
-                            <Popup
-                                x:Name="_laptopColorPopup"
-                                Width="250"
-                                AllowsTransparency="True"
-                                Placement="Bottom"
-                                StaysOpen="False">
+                        <StackPanel Orientation="Horizontal">
+                            <gui:ColorWheel x:Name="_laptopColorWheel" Width="140" Height="140" Margin="0,8,0,8" />
+                            <StackPanel Margin="16,0,0,0" VerticalAlignment="Center" Width="112">
                                 <Border
-                                    Background="{DynamicResource ApplicationBackgroundBrush}"
-                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    x:Name="_laptopColorSwatch"
+                                    Height="26"
+                                    Margin="0,0,0,8"
+                                    Background="Red"
+                                    BorderBrush="#55FFFFFF"
                                     BorderThickness="1"
-                                    CornerRadius="8">
-                                    <StackPanel Margin="16">
-                                        <cp:SquarePicker
-                                            x:Name="_laptopColorSquarePicker"
-                                            Width="200"
-                                            Height="200"
-                                            ColorChanged="LaptopSquarePicker_ColorChanged" />
-                                        <Grid Margin="0,16,0,0">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
-                                            </Grid.RowDefinitions>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,12,8" VerticalAlignment="Center" Text="#" />
-                                            <TextBox
-                                                x:Name="_laptopHexBox"
-                                                Grid.Row="0"
-                                                Grid.Column="1"
-                                                Margin="0,0,0,8"
-                                                LostFocus="LaptopHexBox_LostFocus" />
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,12,8" VerticalAlignment="Center" Text="R" />
-                                            <Slider
-                                                x:Name="_laptopRedSlider"
-                                                Grid.Row="1"
-                                                Grid.Column="1"
-                                                Margin="0,0,0,8"
-                                                Maximum="255"
-                                                Minimum="0"
-                                                ValueChanged="LaptopRgbSlider_ValueChanged" />
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,12,8" VerticalAlignment="Center" Text="G" />
-                                            <Slider
-                                                x:Name="_laptopGreenSlider"
-                                                Grid.Row="2"
-                                                Grid.Column="1"
-                                                Margin="0,0,0,8"
-                                                Maximum="255"
-                                                Minimum="0"
-                                                ValueChanged="LaptopRgbSlider_ValueChanged" />
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" Text="B" />
-                                            <Slider
-                                                x:Name="_laptopBlueSlider"
-                                                Grid.Row="3"
-                                                Grid.Column="1"
-                                                Maximum="255"
-                                                Minimum="0"
-                                                ValueChanged="LaptopRgbSlider_ValueChanged" />
-                                        </Grid>
-                                    </StackPanel>
-                                </Border>
-                            </Popup>
-                        </Border>
+                                    CornerRadius="4" />
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="R" VerticalAlignment="Center" />
+                                    <TextBox x:Name="_laptopRedBox" Grid.Column="1" MaxLength="3" TextChanged="LaptopRgbBox_TextChanged" />
+                                </Grid>
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="G" VerticalAlignment="Center" />
+                                    <TextBox x:Name="_laptopGreenBox" Grid.Column="1" MaxLength="3" TextChanged="LaptopRgbBox_TextChanged" />
+                                </Grid>
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="B" VerticalAlignment="Center" />
+                                    <TextBox x:Name="_laptopBlueBox" Grid.Column="1" MaxLength="3" TextChanged="LaptopRgbBox_TextChanged" />
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="#" VerticalAlignment="Center" />
+                                    <TextBox x:Name="_laptopHexBox" Grid.Column="1" FontFamily="Consolas" MaxLength="7" TextChanged="LaptopHexBox_TextChanged" />
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
                     </wpfui:CardControl>
                     <wpfui:CardControl x:Name="_laptopReverseCard" Margin="0,0,0,8" Icon="ArrowRepeatAll24" Visibility="Collapsed">
                         <wpfui:CardControl.Header>

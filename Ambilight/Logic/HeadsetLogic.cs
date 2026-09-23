@@ -4,7 +4,6 @@ using Ambilight.GUI;
 using Ambilight.Util;
 using Colore;
 using Colore.Effects.Headset;
-using Microsoft.VisualBasic;
 using ColoreColor = Colore.Data.Color;
 
 namespace Ambilight.Logic

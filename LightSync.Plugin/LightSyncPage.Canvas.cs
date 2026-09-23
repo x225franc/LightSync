@@ -45,6 +45,16 @@ public partial class LightSyncPage
         public required Action<double, double, double, double> Commit;
     }
 
+    /// <summary>The canvas keeps its 480x270 logical coordinate space (all the position/size math above is in that
+    /// space) but is visually scaled to fill the available width, via a LayoutTransform - so it grows and shrinks
+    /// with the window instead of always taking the same fixed pixels.</summary>
+    private void CanvasScaleHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_canvasScaleHost.ActualWidth <= 0) return;
+        var scale = Math.Max(0.5, Math.Min(2.0, _canvasScaleHost.ActualWidth / CanvasW));
+        _canvasBorder.LayoutTransform = new ScaleTransform(scale, scale);
+    }
+
     private void LoadCanvasToggles()
     {
         var cfg = LightsService.Config;

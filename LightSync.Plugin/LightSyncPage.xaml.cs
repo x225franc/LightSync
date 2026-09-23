@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using Ambilight.GUI;
 using Ambilight.Lights;
-using Wpf.Ui.Common;
+using Ambilight.Logic;
 using Wpf.Ui.Controls;
 using LibEffect = Ambilight.Logic.LaptopKeyboardEffect;
 using WpfBrush = System.Windows.Media.Brush;
@@ -36,6 +35,11 @@ public partial class LightSyncPage : UiPage
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+
+        _laptopColorWheel.ColorChanged += (_, _) =>
+        {
+            if (_constructed) ApplyLaptopColor(_laptopColorWheel.SelectedColor, ColorSource.Wheel);
+        };
 
         _nav.SelectedIndex = 0;
     }
@@ -71,7 +75,7 @@ public partial class LightSyncPage : UiPage
 
         _laptopEnabledToggle.IsChecked = _settings.LaptopKeyboardEnabled;
         _laptopEffectCombo.SelectedIndex = (int)_settings.LaptopEffect;
-        SetLaptopColorControls(_settings.LaptopColor);
+        ApplyLaptopColor(_settings.LaptopColor, ColorSource.Load);
         _laptopReverseToggle.IsChecked = _settings.LaptopEffectReverse;
         _laptopBrightnessSlider.Value = _settings.LaptopBrightness;
         _laptopSpeedSlider.Value = _settings.LaptopEffectSpeed;
@@ -280,6 +284,13 @@ public partial class LightSyncPage : UiPage
         EngineHost.SaveSettings();
     }
 
+    private void IdentifyGroupsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var screens = System.Windows.Forms.Screen.AllScreens;
+        int idx = Math.Max(0, Math.Min(_monitorCombo.SelectedIndex, screens.Length - 1));
+        GroupIdentifyOverlay.Show(screens[idx].Bounds, TimeSpan.FromSeconds(5));
+    }
+
     // ---- Razer devices ----
 
     private void RazerDeviceToggle_Click(object sender, RoutedEventArgs e)
@@ -339,58 +350,74 @@ public partial class LightSyncPage : UiPage
         _laptopSpeedCard.Visibility = effect == LibEffect.ScreenAmbilight || effect == LibEffect.SolidColor ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private bool _isEditingLaptopColor;
+    private enum ColorSource { Load, Wheel, Rgb, Hex }
 
-    private void LaptopColorSwatch_Click(object sender, MouseButtonEventArgs e)
+    private bool _syncingColor;
+
+    // The wheel, the R/G/B boxes, the hex box and the swatch all show the same color; whichever one the user
+    // edits is the source and every other one is updated from it.
+    private void ApplyLaptopColor(System.Drawing.Color color, ColorSource source)
     {
-        SetLaptopColorControls(_settings.LaptopColor);
-        _laptopColorPopup.IsOpen = true;
-    }
+        if (_syncingColor) return;
 
-    private void SetLaptopColorControls(System.Drawing.Color c)
-    {
-        _isEditingLaptopColor = true;
-        _laptopColorSquarePicker.SelectedColor = WpfColor.FromRgb(c.R, c.G, c.B);
-        _laptopRedSlider.Value = c.R;
-        _laptopGreenSlider.Value = c.G;
-        _laptopBlueSlider.Value = c.B;
-        _laptopHexBox.Text = $"{c.R:X2}{c.G:X2}{c.B:X2}";
-        _laptopColorSwatch.Background = new WpfSolidColorBrush(WpfColor.FromRgb(c.R, c.G, c.B));
-        _isEditingLaptopColor = false;
-    }
-
-    private void ApplyLaptopColor(byte r, byte g, byte b)
-    {
-        _settings.LaptopColor = System.Drawing.Color.FromArgb(255, r, g, b);
-        EngineHost.SaveSettings();
-        SetLaptopColorControls(_settings.LaptopColor);
-    }
-
-    private void LaptopSquarePicker_ColorChanged(object sender, RoutedEventArgs e)
-    {
-        if (!_constructed || _isEditingLaptopColor) return;
-        var c = _laptopColorSquarePicker.SelectedColor;
-        ApplyLaptopColor(c.R, c.G, c.B);
-    }
-
-    private void LaptopRgbSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (!_constructed || _isEditingLaptopColor) return;
-        ApplyLaptopColor((byte)_laptopRedSlider.Value, (byte)_laptopGreenSlider.Value, (byte)_laptopBlueSlider.Value);
-    }
-
-    private void LaptopHexBox_LostFocus(object sender, RoutedEventArgs e)
-    {
-        if (!_constructed || _isEditingLaptopColor) return;
-
-        var text = _laptopHexBox.Text.TrimStart('#');
-        if (text.Length != 6 || !int.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var argb))
+        _syncingColor = true;
+        try
         {
-            SetLaptopColorControls(_settings.LaptopColor);
-            return;
-        }
+            if (source != ColorSource.Wheel)
+                _laptopColorWheel.SelectedColor = color;
 
-        ApplyLaptopColor((byte)((argb >> 16) & 0xFF), (byte)((argb >> 8) & 0xFF), (byte)(argb & 0xFF));
+            if (source != ColorSource.Rgb)
+            {
+                _laptopRedBox.Text = color.R.ToString();
+                _laptopGreenBox.Text = color.G.ToString();
+                _laptopBlueBox.Text = color.B.ToString();
+            }
+
+            if (source != ColorSource.Hex)
+                _laptopHexBox.Text = $"{color.R:X2}{color.G:X2}{color.B:X2}";
+
+            _laptopColorSwatch.Background = new WpfSolidColorBrush(WpfColor.FromRgb(color.R, color.G, color.B));
+
+            if (source != ColorSource.Load)
+            {
+                _settings.LaptopColor = color;
+                EngineHost.SaveSettings();
+            }
+        }
+        finally
+        {
+            _syncingColor = false;
+        }
+    }
+
+    private static bool TryParseChannel(string text, out int value)
+    {
+        if (!int.TryParse(text, out value) || value < 0) return false;
+        value = Math.Min(255, value);
+        return true;
+    }
+
+    private void LaptopRgbBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_constructed || _syncingColor) return;
+
+        if (TryParseChannel(_laptopRedBox.Text, out var r)
+            && TryParseChannel(_laptopGreenBox.Text, out var g)
+            && TryParseChannel(_laptopBlueBox.Text, out var b))
+        {
+            ApplyLaptopColor(System.Drawing.Color.FromArgb(255, r, g, b), ColorSource.Rgb);
+        }
+    }
+
+    private void LaptopHexBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_constructed || _syncingColor) return;
+
+        var hex = _laptopHexBox.Text.Trim().TrimStart('#');
+        if (hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var rgb))
+        {
+            ApplyLaptopColor(System.Drawing.Color.FromArgb(255, (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF), ColorSource.Hex);
+        }
     }
 
     private void LaptopReverseToggle_Click(object sender, RoutedEventArgs e)
@@ -432,16 +459,22 @@ public partial class LightSyncPage : UiPage
         var logicManager = EngineHost.LogicManagerInstance;
         if (logicManager is null) return;
 
-        if (logicManager.ColorTestRunning)
-        {
-            logicManager.StopColorTest();
-            _colorTestButton.Content = "Start test";
-        }
-        else
-        {
-            logicManager.StartColorTest();
-            _colorTestButton.Content = "Stop test";
-        }
+        if (logicManager.ColorTestRunning) logicManager.StopColorTest();
+        else logicManager.StartColorTest();
+
+        // Immediate feedback; the periodic tick (UpdateChromaStatus) keeps this in sync afterwards, including
+        // when the test finishes on its own after its last step instead of being stopped by this button.
+        UpdateColorTestStatus(logicManager);
+    }
+
+    private void UpdateColorTestStatus(LogicManager? logicManager)
+    {
+        bool testing = logicManager != null && logicManager.ColorTestRunning;
+        _colorTestButton.Content = testing ? "Stop test" : "Start test";
+        var currentGroup = testing ? logicManager!.ColorTestCurrentGroup : null;
+        _colorTestStatusText.Text = !testing ? ""
+            : currentGroup != null ? $"Running - now showing {currentGroup}."
+            : "Running - see the log file for which zone is on now.";
     }
 
     private void RescanButton_Click(object sender, RoutedEventArgs e)
@@ -461,6 +494,7 @@ public partial class LightSyncPage : UiPage
             ? "Searching for devices on all network adapters..."
             : (engine.LastScan == default ? "Not searched yet." : $"Last search: {engine.LastScan:HH:mm:ss}");
 
+        UpdateColorTestStatus(EngineHost.LogicManagerInstance);
         UpdateConflictBanners();
     }
 
@@ -796,8 +830,10 @@ public partial class LightSyncPage : UiPage
 
     private static int GroupToIndex(int group)
     {
-        var g = group == 2 ? 1 : group;
-        return g switch { 1 => 0, 3 => 1, 4 => 2, 5 => 3, 6 => 4, _ => 0 };
+        // Must stay the exact inverse of IndexToGroup - this combo has a leading "Default" entry the standalone
+        // app's own group combo does not have, so the two cannot share the same index<->group offsets.
+        var g = group == 2 ? 1 : group;    // Razer ties CL1/CL2 together: a legacy Group=2 behaves like Group=1
+        return g switch { 0 => 0, 1 => 1, 3 => 2, 4 => 3, 5 => 4, 6 => 5, _ => 0 };
     }
 
     private static int IndexToGroup(int index) => index switch { 0 => 0, 1 => 1, 2 => 3, 3 => 4, 4 => 5, 5 => 6, _ => 0 };

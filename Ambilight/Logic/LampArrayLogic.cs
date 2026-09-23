@@ -19,8 +19,8 @@ namespace Ambilight.Logic
         ScreenAmbilight = 0,
         SolidColor = 1,
         Breathing = 2,
-        RainbowWave = 3,
-        ColorCycle = 4,
+        ColorCycle = 3,
+        RainbowWave = 4,
         RainbowWheel = 5
     }
 

@@ -396,5 +396,12 @@ namespace Ambilight.GUI
                 _settings.RestartApplication();
             }
         }
+
+        private void IdentifyGroupsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var screens = System.Windows.Forms.Screen.AllScreens;
+            int idx = Math.Max(0, Math.Min(MonitorCombo.SelectedIndex, screens.Length - 1));
+            GroupIdentifyOverlay.Show(screens[idx].Bounds, TimeSpan.FromSeconds(5));
+        }
     }
 }

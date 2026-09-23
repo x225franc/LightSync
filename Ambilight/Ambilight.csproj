@@ -234,6 +234,9 @@
     <Compile Include="GUI\SettingsWindow.Canvas.cs">
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="GUI\GroupIdentifyOverlay.xaml.cs">
+      <DependentUpon>GroupIdentifyOverlay.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Lights\Config.cs" />
     <Compile Include="Lights\Discovery.cs" />
     <Compile Include="Lights\Engine.cs" />
@@ -301,6 +304,10 @@
   </ItemGroup>
   <ItemGroup>
     <Page Include="GUI\SettingsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="GUI\GroupIdentifyOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

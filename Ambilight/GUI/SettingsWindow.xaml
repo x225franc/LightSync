@@ -671,6 +671,13 @@
                         <ComboBox x:Name="MonitorCombo" Width="160" SelectionChanged="MonitorCombo_SelectionChanged" />
                     </StackPanel>
                 </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Identify groups"
+                                ToolTip="Shows, for a few seconds, where Group 1..4 actually sit on the captured screen - like Windows' own monitor Identify.">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Grid24" />
+                    </ui:CardControl.Icon>
+                    <ui:Button x:Name="IdentifyGroupsButton" Content="Show" Click="IdentifyGroupsButton_Click" />
+                </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Header="'Real' Ambilight mode">
                     <ui:CardControl.Icon>
                         <ui:SymbolIcon Symbol="Sparkle24" />
@@ -753,7 +760,7 @@
                         <ui:SymbolIcon Symbol="Gauge24" />
                     </ui:CardControl.Icon>
                     <StackPanel Orientation="Horizontal">
-                        <Slider x:Name="YeelightFpsSlider" Width="150" Minimum="5" Maximum="30" TickFrequency="1"
+                        <Slider x:Name="YeelightFpsSlider" Width="150" Minimum="1" Maximum="10" TickFrequency="1"
                                 IsSnapToTickEnabled="True" VerticalAlignment="Center"
                                 ValueChanged="YeelightFpsSlider_ValueChanged" />
                         <TextBlock x:Name="YeelightFpsText" Width="60" TextAlignment="Right" VerticalAlignment="Center" />

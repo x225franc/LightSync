@@ -117,6 +117,17 @@ namespace Ambilight.Logic
 
         public bool ColorTestRunning { get { return _testIndex >= 0; } }
 
+        /// <summary>The group currently lit by the running test (null once it is done, or before the very first
+        /// step has been processed).</summary>
+        public string CurrentTestStepLabel
+        {
+            get
+            {
+                int i = _testIndex - 1;
+                return i >= 0 && i < TestSteps.Length ? TestSteps[i].Label : null;
+            }
+        }
+
         /// <summary>Starts (or restarts) the test: Global, then Group 1..4, each shown alone for a few seconds. The
         /// app also reads back what Razer actually broadcasts a couple of seconds into each step and logs the exact
         /// match, so the LED-index-to-CL-slot mapping does not have to be inferred from watching physical bulbs.</summary>

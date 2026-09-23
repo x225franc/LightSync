@@ -94,7 +94,10 @@ namespace Ambilight.GUI
 
             bool testing = Program.LogicManager != null && Program.LogicManager.ColorTestRunning;
             ColorTestButton.Content = testing ? "Stop the test" : "Start the test";
-            ColorTestStatusText.Text = testing ? "Running - see the log file for which zone is on now." : "";
+            string currentGroup = testing ? Program.LogicManager.ColorTestCurrentGroup : null;
+            ColorTestStatusText.Text = !testing ? ""
+                : currentGroup != null ? "Running - now showing " + currentGroup + "."
+                : "Running - see the log file for which zone is on now.";
 
             FirewallBanner.Visibility = _firewallOk ? Visibility.Collapsed : Visibility.Visible;
             LightConnectBanner.Visibility = ExternalApps.IsRunning(ExternalApps.LightConnect) ? Visibility.Visible : Visibility.Collapsed;

@@ -43,7 +43,6 @@
 
 		<!-- These are NOT provided by the host, so they deploy normally (into Plugins\Dependency, see redeploy) -->
 		<PackageReference Include="Colore" Version="6.0.0" />
-		<PackageReference Include="PixiEditor.ColorPicker" Version="3.4.2.2" />
 		<PackageReference Include="morelinq" Version="4.4.0" />
 		<PackageReference Include="SharpDX" Version="4.2.0" />
 		<PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />

@@ -218,11 +218,13 @@ namespace Ambilight.Lights
             set { _config.YeelightFadeMs = Math.Max(0, Math.Min(1500, value)); ScheduleSave(); }
         }
 
-        /// <summary>Color updates per second sent to each Yeelight bulb.</summary>
+        /// <summary>Color updates per second sent to each Yeelight bulb. Capped well below the bulb's real LAN
+        /// Control quota (60 commands/min, ~1/s, per TCP session) - going much above it gets the session killed by
+        /// the bulb itself after a few seconds, not just throttled.</summary>
         public int YeelightFps
         {
-            get { return Math.Max(1, Math.Min(30, _config.YeelightFps)); }
-            set { _config.YeelightFps = Math.Max(1, Math.Min(30, value)); ScheduleSave(); }
+            get { return Math.Max(1, Math.Min(10, _config.YeelightFps)); }
+            set { _config.YeelightFps = Math.Max(1, Math.Min(10, value)); ScheduleSave(); }
         }
 
         /// <summary>Color updates per second sent to each Govee device (Govee devices start to choke above ~25/s).</summary>
@@ -499,8 +501,17 @@ namespace Ambilight.Lights
                 // Start from the brightness the device has now, so adding it does not suddenly change it.
                 Task.Run(() =>
                 {
-                    var st = _govee.QueryStatus(s.Ip, s.Local, 2000);
-                    if (st != null) { state.Config.Brightness = Math.Max(1, Math.Min(100, st.Brightness)); ScheduleSave(); }
+                    try
+                    {
+                        var st = _govee.QueryStatus(s.Ip, s.Local, 2000);
+                        if (st != null) { state.Config.Brightness = Math.Max(1, Math.Min(100, st.Brightness)); ScheduleSave(); }
+                    }
+                    catch (Exception e)
+                    {
+                        // Fire-and-forget: an unguarded exception here would otherwise surface much later (and
+                        // confusingly) via the finalizer thread once this Task is garbage collected unobserved.
+                        Log.Warn("Could not query initial status for Govee " + s.Ip + ": " + e.Message);
+                    }
                 });
             }
         }
@@ -555,10 +566,13 @@ namespace Ambilight.Lights
                 {
                     double lived = (DateTime.UtcNow - b.LinkSince).TotalSeconds;
                     // A bulb that closes its session again and again is being sent more than it can take: ease off for it.
-                    if (lived < 300 && Math.Min(b.FpsCap, YeelightFps) > 8) b.FpsCap = Math.Max(8, Math.Min(b.FpsCap, YeelightFps) * 2 / 3);
+                    if (lived < 300 && Math.Min(b.FpsCap, YeelightFps) > 1) b.FpsCap = Math.Max(1, Math.Min(b.FpsCap, YeelightFps) * 2 / 3);
                     Log.Info("Lost the connection to " + b.Ip + " after " + (int)lived + " s (" + link.CloseReason + "), sending at most " + Math.Min(b.FpsCap, YeelightFps) + " updates/s from now on");
                     DropLink(b);
-                    b.NextAttempt = DateTime.MinValue;     // reconnect right away
+                    // A bulb that just killed a session (quota exceeded, or it is still settling the old one) needs a
+                    // moment before it accepts a new one - reconnecting instantly turns one bad session into a
+                    // connect/disconnect storm instead of letting it recover.
+                    b.NextAttempt = DateTime.UtcNow.AddSeconds(lived < 10 ? 3 : 0);
                 }
                 if (!b.Connecting && now >= b.NextAttempt)
                 {
@@ -769,11 +783,20 @@ namespace Ambilight.Lights
             string ip = b.Ip; var local = b.LocalIp; int last = b.LastStreamRgb;
             return Task.Run(() =>
             {
-                _govee.RazerMode(ip, local, false);
-                if (last >= 0)
+                try
                 {
-                    Thread.Sleep(450);          // the device drops commands that follow each other too closely
-                    _govee.Color(ip, local, last);
+                    _govee.RazerMode(ip, local, false);
+                    if (last >= 0)
+                    {
+                        Thread.Sleep(450);          // the device drops commands that follow each other too closely
+                        _govee.Color(ip, local, last);
+                    }
+                }
+                catch (Exception e)
+                {
+                    // The main call site (Tick) discards this Task fire-and-forget - an unguarded exception here
+                    // would otherwise surface much later (and confusingly) via the finalizer thread instead.
+                    Log.Warn("Could not release Govee stream mode for " + ip + ": " + e.Message);
                 }
             });
         }

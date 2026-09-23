@@ -158,6 +158,7 @@ namespace Ambilight.Logic
         public void StartColorTest() { _linkLogic?.StartColorTest(); }
         public void StopColorTest() { _linkLogic?.StopColorTest(); }
         public bool ColorTestRunning { get { return _linkLogic != null && _linkLogic.ColorTestRunning; } }
+        public string ColorTestCurrentGroup { get { return _linkLogic != null ? _linkLogic.CurrentTestStepLabel : null; } }
 
         private void SafeProcess(string device, IDeviceLogic logic, Bitmap img)
         {

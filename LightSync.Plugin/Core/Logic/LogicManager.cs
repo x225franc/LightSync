@@ -159,6 +159,7 @@ namespace Ambilight.Logic
         public void StartColorTest() { _linkLogic?.StartColorTest(); }
         public void StopColorTest() { _linkLogic?.StopColorTest(); }
         public bool ColorTestRunning { get { return _linkLogic != null && _linkLogic.ColorTestRunning; } }
+        public string ColorTestCurrentGroup { get { return _linkLogic != null ? _linkLogic.CurrentTestStepLabel : null; } }
 
         /// <summary>Stops the capture thread so a fresh LogicManager can be created (e.g. a plugin restart)
         /// without fighting this one over the single DXGI desktop duplication session. The Chroma connection

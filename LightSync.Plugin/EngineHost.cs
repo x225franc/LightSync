@@ -57,20 +57,19 @@ public static class EngineHost
         LogicManagerInstance = null;
     }
 
-    /// <summary>Tears down and recreates the whole engine (Yeelight/Govee, Chroma connection, screen capture) -
-    /// the same thing relaunching the app would do for the standalone version, without actually restarting
-    /// Toolkit. Mainly useful to recover from a stuck Chroma/Synapse connection.</summary>
+    /// <summary>Tears down and recreates only the Yeelight/Govee engine - mainly useful to recover from a stuck
+    /// bulb connection. Deliberately leaves <see cref="LogicManagerInstance"/> (Razer Chroma, the laptop keyboard,
+    /// the lights canvas) untouched: recreating it tears down and re-acquires the Windows Dynamic Lighting
+    /// LampArray, which causes a visible glitch/flicker on the keyboard for no reason - this button is not meant
+    /// to touch the keyboard at all.</summary>
     public static void Restart()
     {
-        if (!_started || _logger is null || _settingsPath is null)
+        if (!_started)
             return;
 
-        Stop();
-        _started = true; // Stop() above cleared it; Start() below is a no-op unless this is set back first.
-
+        LightsService.Stop();
         LightsService.Start();
         if (LightsService.Engine != null) LightsService.Engine.Enabled = Settings.MasterEnabled;
-        LogicManagerInstance = new LogicManager(Settings);
     }
 
     private static void LoadSettings()
