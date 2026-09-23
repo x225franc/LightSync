@@ -324,21 +324,24 @@ namespace Ambilight.Lights
             try
             {
                 var link = b.Link;
-                MusicLink.Snapshot before = null;
                 if (link == null || !link.IsAlive)
                 {
                     temp = new MusicLink(b.Ip, b.Port, b.LocalIp);
                     if (!temp.Open()) { Log.Warn("Preview: cannot reach " + b.Ip + " (" + temp.LastReply + ")"); return; }
-                    before = temp.QueryState();
                     link = temp;
                 }
+
+                // Read back what the bulb was actually showing before the blink - taken through the control
+                // connection, which QueryState uses regardless of whether this is a fresh link or the one already
+                // streaming the Chroma color, so this always has something to restore to afterwards.
+                var before = link.QueryState();
 
                 // White, then bright/dim alternating (a black color is ignored by the bulbs, brightness is not).
                 link.SetPower(true);
                 link.SetRgb(0xFFFFFF);
                 Breathe(v => link.SetBrightness(v), 40);
 
-                if (temp != null && before != null)
+                if (before != null)
                 {
                     link.SetBrightness(before.Brightness);
                     if (before.ColorMode == 2) link.SetCt(before.Ct); else link.SetRgb(before.Rgb);
@@ -363,8 +366,10 @@ namespace Ambilight.Lights
                 _govee.Color(b.Ip, b.LocalIp, 255, 255, 255, 0);
                 Breathe(v => _govee.Brightness(b.Ip, b.LocalIp, v), 90);      // Govee devices cope with ~11 commands a second
 
-                // Controlled devices go back to the Chroma color on their own; the others get their old state back.
-                if (before != null && (!b.Config.Controlled || !_config.ControlEnabled))
+                // Explicitly restored rather than left for the Chroma stream to overwrite on its own - a controlled
+                // device only gets its next real color once its group/canvas source is actually live (Chroma events
+                // flowing, a frame captured, etc.), which is not guaranteed to happen right away.
+                if (before != null)
                 {
                     _govee.Brightness(b.Ip, b.LocalIp, before.Brightness);
                     _govee.Color(b.Ip, b.LocalIp, before.R, before.G, before.B, before.Kelvin);
