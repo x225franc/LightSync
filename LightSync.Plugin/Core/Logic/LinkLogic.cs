@@ -29,6 +29,24 @@ namespace Ambilight.Logic
         {
             this._settings = settings;
             this._chroma = chromaInstance;
+
+            // Some third-party Chroma Connect accessories (reported: a Razer Chroma Addressable RGB Controller)
+            // never actually light up on the very first color frame written after Chroma starts - only a distinct
+            // second write does, which is why manually toggling "Global Brightness" off/on in the Razer Chroma app
+            // fixes it (it forces a second write). Sending one deliberate black frame here, before the real first
+            // frame from Process() follows a moment later, reproduces that same off-then-on transition automatically.
+            Kick();
+        }
+
+        /// <summary>Sends one all-black frame so the next real frame is a distinct second write - see the
+        /// constructor comment. Also exposed for a manual "nudge" button, for when the automatic kick at startup
+        /// was not enough (e.g. the accessory was plugged in or woken up after Chroma had already started).</summary>
+        public void Kick()
+        {
+            for (int i = 0; i < ChromaLinkConstants.MaxLeds; i++)
+                _linkGrid[i] = new ColoreColor((byte)0, (byte)0, (byte)0);
+
+            Send();
         }
 
         /// <summary>

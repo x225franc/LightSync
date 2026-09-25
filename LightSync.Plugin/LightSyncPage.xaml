@@ -333,6 +333,13 @@
                         </wpfui:CardControl.Header>
                         <wpfui:ToggleSwitch x:Name="_linkToggle" Click="RazerDeviceToggle_Click" />
                     </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Flash24"
+                                       ToolTip="Some accessories (e.g. a Razer Chroma Addressable RGB Controller) don't light up on the very first color frame after Chroma starts and need a second one - this sends a black frame so the next real one counts as that second write, the same fix as toggling Global Brightness off/on in the Razer Chroma app. Already sent automatically once when Chroma connects; use this if an accessory was plugged in or woken up afterwards.">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Nudge Chroma Connect accessories" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:Button Content="Nudge" Click="NudgeChromaLinkButton_Click" />
+                    </wpfui:CardControl>
 
                     <TextBlock Margin="0,16,0,8" FontSize="14" FontWeight="SemiBold" Text="Keyboard grid size" />
                     <wpfui:CardControl Margin="0,0,0,8" Icon="Grid24">

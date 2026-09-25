@@ -114,6 +114,13 @@
                     </ui:CardControl.Icon>
                     <ui:ToggleSwitch x:Name="LinkToggle" Click="LinkToggle_Click" />
                 </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Nudge Chroma Connect accessories"
+                                 ToolTip="Some accessories (e.g. a Razer Chroma Addressable RGB Controller) don't light up on the very first color frame after Chroma starts and need a second one - this sends a black frame so the next real one counts as that second write, the same fix as toggling Global Brightness off/on in the Razer Chroma app. Already sent automatically once when Chroma connects; use this if an accessory was plugged in or woken up afterwards.">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Flash24" />
+                    </ui:CardControl.Icon>
+                    <ui:Button Content="Nudge" Click="NudgeChromaLinkButton_Click" />
+                </ui:CardControl>
 
                 <TextBlock Text="Keyboard grid size" FontSize="14" FontWeight="SemiBold" Margin="0,20,0,8" />
                 <ui:CardControl Header="Manual size, width (0-22) x height (0-6)">

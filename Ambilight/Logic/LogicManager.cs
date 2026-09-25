@@ -160,6 +160,11 @@ namespace Ambilight.Logic
         public bool ColorTestRunning { get { return _linkLogic != null && _linkLogic.ColorTestRunning; } }
         public string ColorTestCurrentGroup { get { return _linkLogic != null ? _linkLogic.CurrentTestStepLabel : null; } }
 
+        /// <summary>Manual version of the black-frame "kick" LinkLogic already sends once on its own when Chroma
+        /// first connects (see its constructor) - lets the user retrigger it on demand, e.g. for an accessory that
+        /// was plugged in or woken up after Chroma had already started and so missed the automatic one.</summary>
+        public void KickChromaLink() { _linkLogic?.Kick(); }
+
         private void SafeProcess(string device, IDeviceLogic logic, Bitmap img)
         {
             // Null until the Chroma SDK has been initialized.

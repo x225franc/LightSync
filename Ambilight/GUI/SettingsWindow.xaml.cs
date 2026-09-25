@@ -156,6 +156,9 @@ namespace Ambilight.GUI
         private void LinkToggle_Click(object sender, RoutedEventArgs e) =>
             _settings.SetLinkEnabled(LinkToggle.IsChecked ?? false);
 
+        private void NudgeChromaLinkButton_Click(object sender, RoutedEventArgs e) =>
+            Program.LogicManager?.KickChromaLink();
+
         private void LaptopKeyboardToggle_Click(object sender, RoutedEventArgs e) =>
             _settings.SetLaptopKeyboardEnabled(LaptopKeyboardToggle.IsChecked ?? false);
 

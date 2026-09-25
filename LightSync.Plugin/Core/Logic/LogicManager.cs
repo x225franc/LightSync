@@ -161,6 +161,11 @@ namespace Ambilight.Logic
         public bool ColorTestRunning { get { return _linkLogic != null && _linkLogic.ColorTestRunning; } }
         public string ColorTestCurrentGroup { get { return _linkLogic != null ? _linkLogic.CurrentTestStepLabel : null; } }
 
+        /// <summary>Manual version of the black-frame "kick" LinkLogic already sends once on its own when Chroma
+        /// first connects (see its constructor) - lets the user retrigger it on demand, e.g. for an accessory that
+        /// was plugged in or woken up after Chroma had already started and so missed the automatic one.</summary>
+        public void KickChromaLink() { _linkLogic?.Kick(); }
+
         /// <summary>Stops the capture thread so a fresh LogicManager can be created (e.g. a plugin restart)
         /// without fighting this one over the single DXGI desktop duplication session. The Chroma connection
         /// itself is left to become unreferenced along with everything else once this instance is dropped.</summary>

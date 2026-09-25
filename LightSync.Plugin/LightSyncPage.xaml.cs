@@ -308,6 +308,9 @@ public partial class LightSyncPage : UiPage
         EngineHost.SaveSettings();
     }
 
+    private void NudgeChromaLinkButton_Click(object sender, RoutedEventArgs e) =>
+        EngineHost.LogicManagerInstance?.KickChromaLink();
+
     private void KeyboardWidthSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (!_constructed) return;
