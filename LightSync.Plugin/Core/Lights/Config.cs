@@ -63,6 +63,17 @@ namespace Ambilight.Lights
         public int RazerGroup { get; set; }
     }
 
+    /// <summary>What we remember about one OpenRGB-visible device, keyed by the name OpenRGB itself reports for it
+    /// (its USB product string - stable across reboots and re-plugs, though not across a firmware/driver rename).</summary>
+    public class OpenRgbDeviceConfig
+    {
+        /// <summary>Same 0/1/3/4/5 meaning as <see cref="BulbConfig.Group"/> (0 = not controlled): every LED on the
+        /// device is painted that Chroma zone's solid color - no per-key precision, just an ambilight-style flat
+        /// color, the same as a Yeelight/Govee light assigned to a group.</summary>
+        public int Group { get; set; }
+        public bool Enabled { get; set; } = true;
+    }
+
     public class Config
     {
         public static readonly string DataDir =
@@ -93,6 +104,28 @@ namespace Ambilight.Lights
         }
         /// <summary>Autostart entries of the original apps that we removed (Run value name -> command), so they can be restored.</summary>
         public Dictionary<string, string> SavedRunValues { get; set; } = new Dictionary<string, string>();
+
+        /// <summary>OpenRGB devices (keyboard, mouse, mousepad, dock, ARGB controller...), keyed by the device name
+        /// OpenRGB itself reports - lets Razer (and any other OpenRGB-supported) hardware be driven the same way a
+        /// Yeelight/Govee light picks a Chroma group, but over OpenRGB's own USB/HID link instead of the Chroma SDK,
+        /// so it works even with Razer Synapse never installed or running at all.</summary>
+        public bool OpenRgbEnabled { get; set; }
+        /// <summary>Manual override: always use OpenRGB for these devices, even while Chroma is live. Off (the
+        /// default) only uses OpenRGB when Chroma itself is not available, matching the lights' own fallback.</summary>
+        public bool OpenRgbForce { get; set; }
+        public string OpenRgbHost { get; set; } = "127.0.0.1";
+        public int OpenRgbPort { get; set; } = 6742;
+        public Dictionary<string, OpenRgbDeviceConfig> OpenRgbDevices { get; set; } = new Dictionary<string, OpenRgbDeviceConfig>();
+
+        /// <summary>Gets (creating if needed) the saved settings for one OpenRGB device, by the name OpenRGB reports.</summary>
+        public OpenRgbDeviceConfig GetOpenRgbDevice(string name)
+        {
+            OpenRgbDeviceConfig cfg;
+            if (OpenRgbDevices.TryGetValue(name, out cfg)) return cfg;
+            cfg = new OpenRgbDeviceConfig();
+            OpenRgbDevices[name] = cfg;
+            return cfg;
+        }
         /// <summary>Master switch: when off, no device is controlled (they keep their last color).</summary>
         public bool ControlEnabled { get; set; } = true;
         /// <summary>Maximum color updates per second sent to each Govee device (Chroma itself only produces ~20/s).</summary>
@@ -105,6 +138,9 @@ namespace Ambilight.Lights
         public int YeelightFadeMs { get; set; } = 400;
         /// <summary>Blend between two Chroma frames (which arrive ~20 times a second) so colors move smoothly at the update rate.</summary>
         public bool Interpolate { get; set; }
+        /// <summary>Manual override: always sample the screen directly for Chroma groups, even while Chroma
+        /// Connect is live. Off (the default) prefers live Chroma and falls back to the screen automatically.</summary>
+        public bool ForceLocalZoneControl { get; set; }
 
         // Written by the first builds; folded into SavedRunValues on load, never written back.
         public string OfficialRunValue { get; set; }

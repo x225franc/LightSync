@@ -30,6 +30,7 @@ namespace Ambilight.Logic
         private LampArrayLogic _lampArrayLogic;
         private LightsCanvasLogic _lightsCanvasLogic;
         private DesktopDuplicatorReader _reader;
+        private Ambilight.Lights.OpenRgbController _openRgb;
 
         // Kept as a field on purpose: the IChroma instance has a finalizer that calls into the
         // native SDK, which must never run while the app is alive.
@@ -57,6 +58,13 @@ namespace Ambilight.Logic
                 _lampArrayLogic = new LampArrayLogic(settings);
                 _lightsCanvasLogic = new LightsCanvasLogic(settings);
                 _reader = new DesktopDuplicatorReader(this, settings);
+
+                // Also independent of Chroma: OpenRGB talks straight to the hardware over USB/HID. It only
+                // actually streams colors once Chroma itself is not driving these devices (or the user forced it),
+                // decided fresh on every tick via this closure so it reacts as soon as Chroma connects or drops.
+                _openRgb = new Ambilight.Lights.OpenRgbController();
+                _openRgb.ShouldStreamProvider = () => _chroma == null || (Ambilight.Lights.LightsService.Config?.OpenRgbForce ?? false);
+                _openRgb.Start();
 
                 await InitializeChromaWithRetryAsync();
             }
@@ -164,6 +172,13 @@ namespace Ambilight.Logic
         /// first connects (see its constructor) - lets the user retrigger it on demand, e.g. for an accessory that
         /// was plugged in or woken up after Chroma had already started and so missed the automatic one.</summary>
         public void KickChromaLink() { _linkLogic?.Kick(); }
+
+        public bool OpenRgbConnected { get { return _openRgb != null && _openRgb.Connected; } }
+        public string OpenRgbLastError { get { return _openRgb?.LastError; } }
+        public System.Collections.Generic.List<Ambilight.Lights.OpenRgbDeviceInfo> OpenRgbDiscoveredDevices
+        {
+            get { return _openRgb?.DiscoveredDevices ?? new System.Collections.Generic.List<Ambilight.Lights.OpenRgbDeviceInfo>(); }
+        }
 
         private void SafeProcess(string device, IDeviceLogic logic, Bitmap img)
         {

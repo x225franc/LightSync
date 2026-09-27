@@ -378,6 +378,39 @@
                                 VerticalAlignment="Center" />
                         </StackPanel>
                     </wpfui:CardControl>
+
+                    <TextBlock Margin="0,16,0,8" FontSize="14" FontWeight="SemiBold" Text="OpenRGB" />
+                    <TextBlock Margin="0,0,0,8" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Drives Razer (and any other OpenRGB-supported) hardware straight over OpenRGB's own USB/HID link instead of the Chroma SDK - so it works even without Razer Synapse installed at all. Chroma takes the lead automatically whenever it is live; each device just gets one flat color, the same Chroma group a Yeelight/Govee light can be assigned to." />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Power24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Enable OpenRGB" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_openRgbEnabledToggle" Click="OpenRgbEnabledToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Server24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Server address" />
+                        </wpfui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <wpfui:TextBox x:Name="_openRgbHostBox" Width="130" LostFocus="OpenRgbHostBox_LostFocus" />
+                            <TextBlock Text=":" Margin="4,0,4,0" VerticalAlignment="Center" />
+                            <wpfui:TextBox x:Name="_openRgbPortBox" Width="60" LostFocus="OpenRgbPortBox_LostFocus" />
+                        </StackPanel>
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowSync24"
+                                       ToolTip="Chroma normally takes the lead over OpenRGB whenever it is live. Turn this on to always use OpenRGB instead, even while Chroma is running.">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Always use OpenRGB (ignore Chroma)" TextWrapping="Wrap" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_openRgbForceToggle" Click="OpenRgbForceToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Sparkle24">
+                        <wpfui:CardControl.Header>
+                            <TextBlock x:Name="_openRgbStatusText" TextWrapping="Wrap" FontWeight="SemiBold" />
+                        </wpfui:CardControl.Header>
+                    </wpfui:CardControl>
+                    <ItemsControl x:Name="_openRgbDeviceList" />
                 </StackPanel>
 
                 <!-- Lights -->
@@ -404,6 +437,13 @@
                             </StackPanel>
                         </wpfui:CardControl.Header>
                         <wpfui:Button Click="RescanButton_Click" Content="Search again" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,16" Icon="DesktopSignal24"
+                                       ToolTip="Chroma groups normally prefer live Chroma Connect data and fall back to sampling the screen directly on their own when it isn't available. Turn this on to always use the screen instead, even while Chroma is live.">
+                        <wpfui:CardControl.Header>
+                            <TextBlock Text="Always use local screen colors (ignore Chroma)" TextWrapping="Wrap" />
+                        </wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_forceLocalZoneToggle" Click="ForceLocalZoneToggle_Click" />
                     </wpfui:CardControl>
                     <wpfui:CardControl Margin="0,0,0,16" Icon="Lightbulb24">
                         <wpfui:CardControl.Header>

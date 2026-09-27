@@ -27,6 +27,15 @@ namespace Ambilight.Logic
             bool crop = _settings.UltrawideModeEnabled;
             float saturation = _settings.Saturation, brightness = _settings.DeviceBrightness / 100f;
 
+            // Same four equal left-to-right columns LinkLogic samples for Chroma - computed here too,
+            // unconditionally, so a bulb's Chroma group assignment still works when Razer Synapse/Chroma is not
+            // running at all (see Engine.SetLocalZoneRgb). Chroma itself takes over again the moment it is live.
+            engine.SetLocalZoneRgb(
+                Sample(newImage, 0.00, 0, 0.25, 1, crop, saturation, brightness),
+                Sample(newImage, 0.25, 0, 0.25, 1, crop, saturation, brightness),
+                Sample(newImage, 0.50, 0, 0.25, 1, crop, saturation, brightness),
+                Sample(newImage, 0.75, 0, 0.25, 1, crop, saturation, brightness));
+
             foreach (var b in engine.Bulbs)
             {
                 if (!b.Config.UseScreenPosition || !b.Config.Enabled) continue;

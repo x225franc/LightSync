@@ -62,6 +62,7 @@ namespace Ambilight.GUI
             _isLoading = true;
             ControlToggle.IsChecked = _engine.Enabled;
             InterpolateToggle.IsChecked = _engine.Interpolate;
+            ForceLocalZoneToggle.IsChecked = _engine.ForceLocalZoneControl;
             YeelightFadeSlider.Value = _engine.YeelightFadeMs;
             YeelightFadeText.Text = _engine.YeelightFadeMs == 0 ? "instant" : _engine.YeelightFadeMs + " ms";
             YeelightOffSlider.Value = _engine.YeelightOffBelow;
@@ -78,6 +79,11 @@ namespace Ambilight.GUI
         {
             if (_engine == null)
                 return;
+
+            // A device removed (by the user, or the engine forgetting it some other way) loses its card here too.
+            var liveStates = new HashSet<BulbState>(_engine.Bulbs);
+            for (int i = _bulbs.Count - 1; i >= 0; i--)
+                if (!liveStates.Contains(_bulbs[i].State)) _bulbs.RemoveAt(i);
 
             // Devices found after the window was opened get a card of their own.
             var known = new HashSet<BulbState>();
@@ -167,6 +173,12 @@ namespace Ambilight.GUI
         {
             if (_isLoading || _engine == null) return;
             _engine.Interpolate = InterpolateToggle.IsChecked == true;
+        }
+
+        private void ForceLocalZoneToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading || _engine == null) return;
+            _engine.ForceLocalZoneControl = ForceLocalZoneToggle.IsChecked == true;
         }
 
         private void YeelightFadeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

@@ -102,6 +102,10 @@
     <Reference Include="Costura, Version=4.1.0.0, Culture=neutral, PublicKeyToken=9919ef960d84173d, processorArchitecture=MSIL">
       <HintPath>..\packages\Costura.Fody.4.1.0\lib\net40\Costura.dll</HintPath>
     </Reference>
+    <Reference Include="OpenRGB.NET, Version=1.7.0.0, Culture=neutral, PublicKeyToken=null">
+      <HintPath>..\packages\OpenRGB.NET.1.7.0\lib\netstandard2.0\OpenRGB.NET.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="JetBrains.Annotations, Version=2020.1.0.0, Culture=neutral, PublicKeyToken=1010a0d8d6380325, processorArchitecture=MSIL">
       <HintPath>..\packages\JetBrains.Annotations.2020.1.0\lib\net20\JetBrains.Annotations.dll</HintPath>
     </Reference>
@@ -225,10 +229,14 @@
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
     <Compile Include="GUI\BulbViewModel.cs" />
+    <Compile Include="GUI\OpenRgbDeviceViewModel.cs" />
     <Compile Include="GUI\SettingsWindow.xaml.cs">
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="GUI\SettingsWindow.Lights.cs">
+      <DependentUpon>SettingsWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="GUI\SettingsWindow.OpenRgb.cs">
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="GUI\SettingsWindow.Canvas.cs">
@@ -247,6 +255,7 @@
     <Compile Include="Lights\LightsService.cs" />
     <Compile Include="Lights\Log.cs" />
     <Compile Include="Lights\MusicLink.cs" />
+    <Compile Include="Lights\OpenRgbController.cs" />
     <Compile Include="Lights\RazerBroadcast.cs" />
     <Compile Include="Lights\RazerCanvasFeed.cs" />
     <Compile Include="Lights\ScreenState.cs" />

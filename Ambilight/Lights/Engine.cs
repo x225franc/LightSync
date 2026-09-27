@@ -151,10 +151,11 @@ namespace Ambilight.Lights
             get
             {
                 if (!Enabled) return "Light control is off - the lights keep their last color";
-                if (!_razer.IsStarted) return _razer.LastError ?? "Waiting for Razer Synapse...";
+                if (_config.ForceLocalZoneControl) return "Chroma groups are following the screen directly (forced - Chroma is ignored even if it is live)";
+                if (!_razer.IsStarted) return (_razer.LastError ?? "Waiting for Razer Synapse...") + " Chroma groups are following the screen directly in the meantime.";
                 if (_razer.Live) return "Receiving Chroma colors";
-                if (_razer.Events == 0) return "Connected to Razer - no lighting data yet (is Chroma Connect enabled for Yeelight in Synapse?)";
-                return "Connected to Razer - Chroma Connect is paused";
+                if (_razer.Events == 0) return "No Chroma Connect data yet (is it enabled for Yeelight in Synapse?) - Chroma groups are following the screen directly in the meantime.";
+                return "Connected to Razer - Chroma Connect is paused, following the screen directly in the meantime";
             }
         }
         public bool ChromaLive { get { return _razer.Live; } }
@@ -171,9 +172,20 @@ namespace Ambilight.Lights
             set { _config.Interpolate = value; _smoothInit = false; ScheduleSave(); }
         }
 
+        /// <summary>Manual override: always use the screen-sampled fallback for Chroma groups, even while Chroma
+        /// Connect is live. Off (the default) prefers live Chroma and falls back to the screen automatically.</summary>
+        public bool ForceLocalZoneControl
+        {
+            get { return _config.ForceLocalZoneControl; }
+            set { _config.ForceLocalZoneControl = value; ScheduleSave(); }
+        }
+
+        /// <summary>What is actually driving the Chroma groups right now, for the UI.</summary>
+        public bool UsingLocalZoneControl { get { return _config.ForceLocalZoneControl || !_razer.Live; } }
+
         void UpdateSmoothing(DateTime now)
         {
-            if (!_config.Interpolate || _razer.Events == 0) { _smoothInit = false; return; }
+            if (!_config.Interpolate || UsingLocalZoneControl) { _smoothInit = false; return; }
             double dt = _smoothInit ? (now - _smoothAt).TotalSeconds : 0;
             double a = _smoothInit ? 1 - Math.Exp(-dt / SmoothTau) : 1;     // first frame: jump straight to the color
             _smoothAt = now;
@@ -190,12 +202,34 @@ namespace Ambilight.Lights
             _smoothInit = true;
         }
 
-        /// <summary>Current color of a Chroma zone (0..4): the smoothed one when interpolation is on.</summary>
+        /// <summary>Current color of a Chroma zone (0..4): the smoothed one when interpolation is on, or - when
+        /// Chroma Connect is not live - the matching quarter of the screen sampled directly (see
+        /// <see cref="SetLocalZoneRgb"/>), so a bulb's Chroma group assignment still works without Razer Synapse
+        /// running at all. Chroma takes the lead again the moment it starts broadcasting.</summary>
         int ZoneRgb(int zone)
         {
+            if (UsingLocalZoneControl) return LocalZoneRgb(zone);
             if (!_config.Interpolate || !_smoothInit) return _razer.GetRgb(zone);
             int r = (int)Math.Round(_smooth[zone * 3]), g = (int)Math.Round(_smooth[zone * 3 + 1]), b = (int)Math.Round(_smooth[zone * 3 + 2]);
             return (r << 16) | (g << 8) | b;
+        }
+
+        volatile int[] _localZoneRgb = new int[4];
+
+        /// <summary>Zone 0 and 1 are CL1/CL2, which Razer itself always ties to the same value - so they share the
+        /// same screen column here too, the same way a real Chroma broadcast would.</summary>
+        int LocalZoneRgb(int zone)
+        {
+            var cols = _localZoneRgb;
+            int col = zone <= 1 ? 0 : zone - 1;
+            return cols[Math.Max(0, Math.Min(3, col))];
+        }
+
+        /// <summary>Called every captured frame, regardless of whether Chroma Connect is live, with the same four
+        /// equal left-to-right screen columns LinkLogic sends to Chroma - see LightsCanvasLogic.</summary>
+        public void SetLocalZoneRgb(int col0, int col1, int col2, int col3)
+        {
+            _localZoneRgb = new[] { col0, col1, col2, col3 };
         }
 
         /// <summary>Same group numbering a bulb's Group uses (1..4 = Chroma group 1..4): the color a Razer device
@@ -455,6 +489,19 @@ namespace Ambilight.Lights
             return state;
         }
 
+        /// <summary>Permanently forgets a device (its name/group/brightness/canvas position, all of it) and closes
+        /// any connection it still has open. A device that comes back on the network afterwards is not blocked -
+        /// it is simply discovered again as a brand new entry with default settings, same as the first time.</summary>
+        public void RemoveBulb(BulbState state)
+        {
+            DropLink(state);
+            _ = ReleaseGovee(state);
+
+            lock (_bulbs) _bulbs.Remove(state);
+            lock (_config.Bulbs) _config.Bulbs.Remove(state.Config);
+            ScheduleSave();
+        }
+
         void Merge(List<DiscoveredBulb> found)
         {
             foreach (var d in found)
@@ -605,7 +652,6 @@ namespace Ambilight.Lights
             }
             else
             {
-                if (_razer.Events == 0) return;
                 rgb = ZoneRgb(Math.Min(group, 5) - 1);
             }
             b.CurrentRgb = rgb;
@@ -750,7 +796,6 @@ namespace Ambilight.Lights
                     if (sent) { b.LastSentRgb = b.ScreenRgb; b.LastSentAt = now; b.LastStreamRgb = b.ScreenRgb; }
                 }
             }
-            else if (_razer.Events == 0) return;
             else if (group == SpreadGroup)
             {
                 // The four Chroma groups as a gradient along the device (first segment = Group 1 ... last = Group 4).
@@ -855,6 +900,10 @@ namespace Ambilight.Lights
             }
         }
 
+        /// <summary>Hands the bulb back properly when control is actually being released (not just a transient
+        /// reconnect - this is only called from the disabled/uncontrolled branch of Tick()): restores whatever it
+        /// was showing before we first took it over, through the still-open link, then clears the snapshot so the
+        /// next time control is taken it captures fresh again.</summary>
         void DropLink(BulbState b)
         {
             var link = b.Link;

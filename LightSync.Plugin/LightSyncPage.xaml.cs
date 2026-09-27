@@ -73,6 +73,12 @@ public partial class LightSyncPage : UiPage
         _kbWidthSlider.Value = _settings.KeyboardWidth;
         _kbHeightSlider.Value = _settings.KeyboardHeight;
 
+        var openRgbConfig = LightsService.Config;
+        _openRgbEnabledToggle.IsChecked = openRgbConfig?.OpenRgbEnabled ?? false;
+        _openRgbForceToggle.IsChecked = openRgbConfig?.OpenRgbForce ?? false;
+        _openRgbHostBox.Text = openRgbConfig?.OpenRgbHost ?? "127.0.0.1";
+        _openRgbPortBox.Text = (openRgbConfig?.OpenRgbPort ?? 6742).ToString();
+
         _laptopEnabledToggle.IsChecked = _settings.LaptopKeyboardEnabled;
         _laptopEffectCombo.SelectedIndex = (int)_settings.LaptopEffect;
         ApplyLaptopColor(_settings.LaptopColor, ColorSource.Load);
@@ -82,12 +88,13 @@ public partial class LightSyncPage : UiPage
 
         UpdateLaptopEffectVisibility();
         RefreshBulbList(force: true);
+        RefreshOpenRgbList(force: true);
         UpdateChromaStatus();
 
         _isUpdatingUi = false;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-        _timer.Tick += (_, _) => { UpdateStatus(); UpdateChromaStatus(); RefreshBulbList(force: false); };
+        _timer.Tick += (_, _) => { UpdateStatus(); UpdateChromaStatus(); RefreshBulbList(force: false); RefreshOpenRgbList(force: false); };
         _timer.Start();
         UpdateStatus();
     }
@@ -114,7 +121,7 @@ public partial class LightSyncPage : UiPage
 
         switch (item.Tag as string)
         {
-            case "Razer": _razerPanel.Visibility = Visibility.Visible; break;
+            case "Razer": _razerPanel.Visibility = Visibility.Visible; RefreshOpenRgbList(force: true); break;
             case "Lights": _lightsPanel.Visibility = Visibility.Visible; UpdateChromaStatus(); RefreshBulbList(force: true); break;
             case "Canvas": _canvasPanel.Visibility = Visibility.Visible; SyncCanvas(); break;
             case "Laptop": _laptopPanel.Visibility = Visibility.Visible; UpdateStatus(); break;
@@ -311,6 +318,52 @@ public partial class LightSyncPage : UiPage
     private void NudgeChromaLinkButton_Click(object sender, RoutedEventArgs e) =>
         EngineHost.LogicManagerInstance?.KickChromaLink();
 
+    // ---- OpenRGB ----
+
+    private void OpenRgbEnabledToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_constructed || _isUpdatingUi) return;
+        var config = LightsService.Config;
+        if (config is null) return;
+        config.OpenRgbEnabled = _openRgbEnabledToggle.IsChecked ?? false;
+        config.Save();
+        RefreshOpenRgbList(force: true);
+    }
+
+    private void OpenRgbForceToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_constructed || _isUpdatingUi) return;
+        var config = LightsService.Config;
+        if (config is null) return;
+        config.OpenRgbForce = _openRgbForceToggle.IsChecked ?? false;
+        config.Save();
+    }
+
+    private void OpenRgbHostBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_constructed) return;
+        var config = LightsService.Config;
+        if (config is null) return;
+        var host = _openRgbHostBox.Text.Trim();
+        if (host.Length == 0) { _openRgbHostBox.Text = config.OpenRgbHost; return; }
+        config.OpenRgbHost = host;
+        config.Save();
+    }
+
+    private void OpenRgbPortBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_constructed) return;
+        var config = LightsService.Config;
+        if (config is null) return;
+        if (!int.TryParse(_openRgbPortBox.Text.Trim(), out var port) || port <= 0 || port > 65535)
+        {
+            _openRgbPortBox.Text = config.OpenRgbPort.ToString();
+            return;
+        }
+        config.OpenRgbPort = port;
+        config.Save();
+    }
+
     private void KeyboardWidthSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (!_constructed) return;
@@ -459,6 +512,13 @@ public partial class LightSyncPage : UiPage
         if (engine != null) engine.Enabled = _lightsMasterToggle.IsChecked ?? false;
     }
 
+    private void ForceLocalZoneToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_constructed || _isUpdatingUi) return;
+        var engine = LightsService.Engine;
+        if (engine != null) engine.ForceLocalZoneControl = _forceLocalZoneToggle.IsChecked ?? false;
+    }
+
     private void ColorTestButton_Click(object sender, RoutedEventArgs e)
     {
         var logicManager = EngineHost.LogicManagerInstance;
@@ -494,6 +554,7 @@ public partial class LightSyncPage : UiPage
         if (engine is null) return;
 
         if (!_isUpdatingUi) _lightsMasterToggle.IsChecked = engine.Enabled;
+        if (!_isUpdatingUi) _forceLocalZoneToggle.IsChecked = engine.ForceLocalZoneControl;
         _chromaStatusText.Text = engine.ChromaStatus;
         _scanStatusText.Text = engine.Scanning
             ? "Searching for devices on all network adapters..."
@@ -690,12 +751,29 @@ public partial class LightSyncPage : UiPage
             engine.SetEnabled(bulb, enabledToggle.IsChecked ?? false);
         };
 
-        var previewButton = new Wpf.Ui.Controls.Button { Content = "Preview", VerticalAlignment = VerticalAlignment.Center };
+        var previewButton = new Wpf.Ui.Controls.Button { Content = "Preview", Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         previewButton.Click += (_, _) => engine.Identify(bulb);
+
+        var removeButton = new Wpf.Ui.Controls.Button { Content = "Remove", VerticalAlignment = VerticalAlignment.Center };
+        removeButton.Click += (_, _) =>
+        {
+            var result = System.Windows.MessageBox.Show(
+                $"Remove \"{nameText.Text}\"? Its name, group, brightness and canvas position will be forgotten. " +
+                "If it's still on the network, \"Search again\" finds it as a new entry.",
+                "Remove device",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+            if (result == System.Windows.MessageBoxResult.Yes)
+            {
+                engine.RemoveBulb(bulb);
+                RefreshBulbList(force: true);
+            }
+        };
 
         var actionsColumn = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         actionsColumn.Children.Add(enabledToggle);
         actionsColumn.Children.Add(previewButton);
+        actionsColumn.Children.Add(removeButton);
 
         var header = new Grid { Margin = new Thickness(0, 0, 0, 12) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -842,6 +920,142 @@ public partial class LightSyncPage : UiPage
     }
 
     private static int IndexToGroup(int index) => index switch { 0 => 0, 1 => 1, 2 => 3, 3 => 4, 4 => 5, 5 => 6, _ => 0 };
+
+    // ---- OpenRGB device list ----
+
+    private sealed class OpenRgbRow
+    {
+        public required ToggleSwitch EnabledToggle;
+        public required ComboBox GroupCombo;
+    }
+
+    private readonly Dictionary<string, OpenRgbRow> _openRgbRows = new();
+
+    private void RefreshOpenRgbList(bool force)
+    {
+        var config = LightsService.Config;
+        var logicManager = EngineHost.LogicManagerInstance;
+
+        if (config is null || !config.OpenRgbEnabled)
+        {
+            _openRgbStatusText.Text = config is not null ? "OpenRGB is off." : "";
+            if (force) { _openRgbRows.Clear(); _openRgbDeviceList.Items.Clear(); }
+            return;
+        }
+
+        var connected = logicManager?.OpenRgbConnected ?? false;
+        _openRgbStatusText.Text = connected
+            ? "Connected to the OpenRGB server."
+            : "Not connected" + (string.IsNullOrEmpty(logicManager?.OpenRgbLastError) ? " yet." : $": {logicManager!.OpenRgbLastError}");
+
+        var found = logicManager?.OpenRgbDiscoveredDevices ?? new List<OpenRgbDeviceInfo>();
+        var names = new HashSet<string>(found.Select(d => d.Name));
+
+        if (force || !names.SetEquals(_openRgbRows.Keys))
+        {
+            _openRgbRows.Clear();
+
+            var rows = new StackPanel();
+            foreach (var device in found)
+            {
+                var (card, row) = BuildOpenRgbRow(config, device);
+                _openRgbRows[device.Name] = row;
+                rows.Children.Add(card);
+            }
+
+            if (found.Count == 0 && connected)
+            {
+                rows.Children.Add(new TextBlock
+                {
+                    Text = "No OpenRGB devices found yet.",
+                    Foreground = (WpfBrush)FindResource("TextFillColorSecondaryBrush"),
+                    Margin = new Thickness(0, 8, 0, 0),
+                });
+            }
+
+            _openRgbDeviceList.Items.Clear();
+            _openRgbDeviceList.Items.Add(rows);
+            return;
+        }
+
+        var wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            foreach (var device in found)
+            {
+                if (!_openRgbRows.TryGetValue(device.Name, out var row)) continue;
+                var deviceConfig = config.GetOpenRgbDevice(device.Name);
+                if (row.EnabledToggle.IsChecked != deviceConfig.Enabled) row.EnabledToggle.IsChecked = deviceConfig.Enabled;
+                var groupIndex = GroupToIndex(deviceConfig.Group);
+                if (row.GroupCombo.SelectedIndex != groupIndex) row.GroupCombo.SelectedIndex = groupIndex;
+            }
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
+
+    private (Border Card, OpenRgbRow Row) BuildOpenRgbRow(Config config, OpenRgbDeviceInfo device)
+    {
+        var deviceConfig = config.GetOpenRgbDevice(device.Name);
+        var secondaryBrush = (WpfBrush)FindResource("TextFillColorSecondaryBrush");
+
+        var nameText = new TextBlock { FontWeight = FontWeights.Medium, Text = device.Name };
+        var subtitle = new TextBlock { FontSize = 11, Foreground = secondaryBrush, Text = $"{device.LedCount} LED{(device.LedCount == 1 ? "" : "s")}" };
+        var identityColumn = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        identityColumn.Children.Add(nameText);
+        identityColumn.Children.Add(subtitle);
+
+        var enabledToggle = new ToggleSwitch { IsChecked = deviceConfig.Enabled, VerticalAlignment = VerticalAlignment.Center };
+        enabledToggle.Click += (_, _) =>
+        {
+            if (_isUpdatingUi) return;
+            deviceConfig.Enabled = enabledToggle.IsChecked ?? false;
+            config.Save();
+        };
+
+        var header = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(identityColumn, 0);
+        Grid.SetColumn(enabledToggle, 1);
+        header.Children.Add(identityColumn);
+        header.Children.Add(enabledToggle);
+
+        var groupCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Left, Width = 190 };
+        groupCombo.Items.Add(new ComboBoxItem { Content = "Not controlled" });
+        groupCombo.Items.Add(new ComboBoxItem { Content = "Group 1" });
+        groupCombo.Items.Add(new ComboBoxItem { Content = "Group 2" });
+        groupCombo.Items.Add(new ComboBoxItem { Content = "Group 3" });
+        groupCombo.Items.Add(new ComboBoxItem { Content = "Group 4" });
+        groupCombo.SelectedIndex = GroupToIndex(deviceConfig.Group);
+        groupCombo.SelectionChanged += (_, _) =>
+        {
+            if (_isUpdatingUi) return;
+            deviceConfig.Group = IndexToGroup(groupCombo.SelectedIndex);
+            config.Save();
+        };
+
+        var content = new StackPanel();
+        content.Children.Add(LabeledRow("Chroma group", groupCombo));
+
+        var card = new StackPanel();
+        card.Children.Add(header);
+        card.Children.Add(content);
+
+        var border = new Border
+        {
+            Margin = new Thickness(0, 0, 0, 8),
+            Padding = new Thickness(16),
+            Background = (WpfBrush)FindResource("ControlFillColorDefaultBrush"),
+            CornerRadius = new CornerRadius(8),
+            Child = card,
+        };
+
+        return (border, new OpenRgbRow { EnabledToggle = enabledToggle, GroupCombo = groupCombo });
+    }
 
     // ---- Status ----
 

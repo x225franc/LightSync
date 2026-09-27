@@ -138,6 +138,85 @@
                     </StackPanel>
                 </ui:CardControl>
 
+                <TextBlock Text="OpenRGB" FontSize="14" FontWeight="SemiBold" Margin="0,20,0,8" />
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="Drives Razer (and any other OpenRGB-supported) hardware straight over OpenRGB's own USB/HID link instead of the Chroma SDK - so it works even without Razer Synapse installed at all. Chroma takes the lead automatically whenever it is live; each device just gets one flat color, the same Chroma group a Yeelight/Govee light can be assigned to." />
+                <ui:CardControl Margin="0,0,0,4" Header="Enable OpenRGB">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Power24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="OpenRgbEnabledToggle" Click="OpenRgbEnabledToggle_Click" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Header="Server address">
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Server24" />
+                    </ui:CardControl.Icon>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:TextBox x:Name="OpenRgbHostBox" Width="130" LostFocus="OpenRgbHostBox_LostFocus" />
+                        <TextBlock Text=":" Margin="4,0,4,0" VerticalAlignment="Center" />
+                        <ui:TextBox x:Name="OpenRgbPortBox" Width="60" LostFocus="OpenRgbPortBox_LostFocus" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4"
+                                 ToolTip="Chroma normally takes the lead over OpenRGB whenever it is live. Turn this on to always use OpenRGB instead, even while Chroma is running.">
+                    <ui:CardControl.Header>
+                        <TextBlock Text="Always use OpenRGB (ignore Chroma)" TextWrapping="Wrap" />
+                    </ui:CardControl.Header>
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="ArrowSync24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="OpenRgbForceToggle" Click="OpenRgbForceToggle_Click" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,16">
+                    <ui:CardControl.Header>
+                        <TextBlock x:Name="OpenRgbStatusText" TextWrapping="Wrap" FontWeight="SemiBold" />
+                    </ui:CardControl.Header>
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Sparkle24" />
+                    </ui:CardControl.Icon>
+                </ui:CardControl>
+
+                <ItemsControl x:Name="OpenRgbDevicesList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,6" Padding="14" CornerRadius="8" BorderThickness="1"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Subtitle}" Opacity="0.7" FontSize="12" Margin="0,1,0,0" />
+                                        </StackPanel>
+                                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                                         ToolTip="Turns OpenRGB control of this device on or off" />
+                                    </Grid>
+                                    <Grid Margin="0,10,0,0" IsEnabled="{Binding Enabled}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Chroma group" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" HorizontalAlignment="Left" Width="190"
+                                                  SelectedIndex="{Binding GroupIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="Not controlled" />
+                                            <ComboBoxItem Content="Group 1" />
+                                            <ComboBoxItem Content="Group 2" />
+                                            <ComboBoxItem Content="Group 3" />
+                                            <ComboBoxItem Content="Group 4" />
+                                        </ComboBox>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="OpenRgbNoDevicesText" Margin="0,4,0,16" FontSize="12" Opacity="0.7"
+                           Text="No OpenRGB devices found yet." TextWrapping="Wrap" />
 
                     </StackPanel>
                 </ScrollViewer>
@@ -170,6 +249,16 @@
                         <ui:SymbolIcon Symbol="Sparkle24" />
                     </ui:CardControl.Icon>
                     <ui:Button x:Name="RescanButton" Content="Search again" Click="RescanButton_Click" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4"
+                                 ToolTip="Chroma groups normally prefer live Chroma Connect data and fall back to sampling the screen directly on their own when it isn't available. Turn this on to always use the screen instead, even while Chroma is live.">
+                    <ui:CardControl.Header>
+                        <TextBlock Text="Always use local screen colors (ignore Chroma)" TextWrapping="Wrap" />
+                    </ui:CardControl.Header>
+                    <ui:CardControl.Icon>
+                        <ui:SymbolIcon Symbol="Desktop24" />
+                    </ui:CardControl.Icon>
+                    <ui:ToggleSwitch x:Name="ForceLocalZoneToggle" Click="ForceLocalZoneToggle_Click" />
                 </ui:CardControl>
 
                 <!-- Shown when Windows Firewall has no rule for this app (Yeelight bulbs connect back to the PC) -->
@@ -278,7 +367,11 @@
                                                                  ToolTip="Turns this light on or off (its Chroma group is kept while off)" />
                                                 <ui:Button Content="Preview"
                                                            Command="{Binding PreviewCommand}"
+                                                           Margin="0,0,8,0"
                                                            ToolTip="Blinks this bulb white so you can see which one it is" />
+                                                <ui:Button Content="Remove"
+                                                           Command="{Binding RemoveCommand}"
+                                                           ToolTip="Forgets this device (name, group, brightness, canvas position). If it's still on the network, 'Search again' finds it as a new entry." />
                                             </StackPanel>
                                         </Grid>
                                         <StackPanel Orientation="Horizontal" Margin="0,4,0,10">

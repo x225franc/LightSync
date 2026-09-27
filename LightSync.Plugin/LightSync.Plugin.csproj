@@ -44,6 +44,7 @@
 		<!-- These are NOT provided by the host, so they deploy normally (into Plugins\Dependency, see redeploy) -->
 		<PackageReference Include="Colore" Version="6.0.0" />
 		<PackageReference Include="morelinq" Version="4.4.0" />
+		<PackageReference Include="OpenRGB.NET" Version="3.1.1" />
 		<PackageReference Include="SharpDX" Version="4.2.0" />
 		<PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
 		<PackageReference Include="SharpDX.DXGI" Version="4.2.0" />

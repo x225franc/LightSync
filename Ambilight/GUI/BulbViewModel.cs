@@ -25,10 +25,24 @@ namespace Ambilight.GUI
         {
             _engine = engine; State = state;
             PreviewCommand = new RelayCommand(() => _engine.Identify(State));
+            RemoveCommand = new RelayCommand(() =>
+            {
+                var result = System.Windows.MessageBox.Show(
+                    "Remove \"" + Title + "\"? Its name, group, brightness and canvas position will be forgotten. " +
+                    "If it's still on the network, \"Search again\" finds it as a new entry.",
+                    "Remove device",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+                if (result == System.Windows.MessageBoxResult.Yes)
+                    _engine.RemoveBulb(State);
+            });
         }
 
         /// <summary>Blinks the device so it can be told apart from the others.</summary>
         public ICommand PreviewCommand { get; private set; }
+
+        /// <summary>Forgets the device entirely (asks for confirmation first).</summary>
+        public ICommand RemoveCommand { get; private set; }
 
         public event PropertyChangedEventHandler PropertyChanged;
         void Raise(string name) { var h = PropertyChanged; if (h != null) h(this, new PropertyChangedEventArgs(name)); }
