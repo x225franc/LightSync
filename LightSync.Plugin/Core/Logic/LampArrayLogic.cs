@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Ambilight.GUI;
 using Ambilight.Lights;
 using Ambilight.Util;
+using Microsoft.Win32;
 using NLog;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Lights;
@@ -66,11 +67,40 @@ namespace Ambilight.Logic
         // Latest colors computed from the screen (before brightness), read by the sender thread.
         private volatile WinColor[] _screenColors;
 
+        // Set from the SystemEvents callback thread (a foreign thread), only ever read/cleared by the
+        // sender thread - the cached LampArray handle itself stays single-threaded (see ForceRediscovery).
+        private volatile bool _rediscoverRequested;
+
         public LampArrayLogic(TraySettings settings)
         {
             _settings = settings;
 
+            // The cached LampArray handle can go stale across a hibernate/resume cycle (or a lock/unlock) -
+            // the HID device is torn down and re-enumerated underneath it, but SetColorsForIndices/IsAvailable
+            // on the stale object never actually throws, so without this the keyboard effect gets stuck until
+            // the whole process is restarted. Force a fresh DiscoverAsync instead of trusting the cached one.
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            SystemEvents.SessionSwitch += OnSessionSwitch;
+
             new Thread(SenderLoop) { IsBackground = true, Name = "LampArrayLogic" }.Start();
+        }
+
+        private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (e.Mode == PowerModes.Resume)
+                RequestRediscovery("system resumed");
+        }
+
+        private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            if (e.Reason == SessionSwitchReason.SessionUnlock || e.Reason == SessionSwitchReason.ConsoleConnect)
+                RequestRediscovery("session " + e.Reason);
+        }
+
+        private void RequestRediscovery(string why)
+        {
+            _log.Info($"Dynamic Lighting keyboard: {why}, forcing rediscovery in case the cached handle went stale.");
+            _rediscoverRequested = true;
         }
 
         /// <summary>Called for each captured frame; only prepares screen colors.</summary>
@@ -129,6 +159,13 @@ namespace Ambilight.Logic
 
                 try
                 {
+                    if (_rediscoverRequested)
+                    {
+                        _rediscoverRequested = false;
+                        _lampArray = null;
+                        _nextDiscovery = DateTime.MinValue;
+                    }
+
                     var lampArray = _lampArray;
                     if (lampArray == null)
                     {

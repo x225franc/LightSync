@@ -75,18 +75,27 @@ namespace Ambilight.DesktopDuplication
             _log.Info($"DesktopDuplicatorReader created.");
         }
 
+        // Grabbing the desktop duplication interface again the instant Resume/Unlock fires races the display
+        // driver bringing outputs back online - that race is what leaves the desktop wallpaper/composition
+        // black until a manual lock/unlock forces DWM to repaint. Waiting a short grace period after resume
+        // before touching DXGI again gives the driver time to settle first.
+        private static readonly TimeSpan ResumeGracePeriod = TimeSpan.FromMilliseconds(1500);
+        private DateTime? _resumeAt;
+
         private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
             if (e.Mode == PowerModes.Suspend)
             {
                 _log.Debug("System suspending, pausing desktop capture.");
                 _suspended = true;
+                _resumeAt = null;
             }
             else if (e.Mode == PowerModes.Resume)
             {
-                _log.Debug("System resumed, resuming desktop capture.");
+                _log.Debug($"System resumed, resuming desktop capture after a {ResumeGracePeriod.TotalMilliseconds:0} ms grace period.");
                 RequestReinitialize();
-                _suspended = false;
+                _suspended = true;
+                _resumeAt = DateTime.UtcNow + ResumeGracePeriod;
             }
         }
 
@@ -99,13 +108,15 @@ namespace Ambilight.DesktopDuplication
                 case SessionSwitchReason.ConsoleDisconnect:
                     _log.Debug($"Session switch ({e.Reason}), pausing desktop capture.");
                     _suspended = true;
+                    _resumeAt = null;
                     break;
                 case SessionSwitchReason.SessionUnlock:
                 case SessionSwitchReason.RemoteConnect:
                 case SessionSwitchReason.ConsoleConnect:
-                    _log.Debug($"Session switch ({e.Reason}), resuming desktop capture.");
+                    _log.Debug($"Session switch ({e.Reason}), resuming desktop capture after a {ResumeGracePeriod.TotalMilliseconds:0} ms grace period.");
                     RequestReinitialize();
-                    _suspended = false;
+                    _suspended = true;
+                    _resumeAt = DateTime.UtcNow + ResumeGracePeriod;
                     break;
             }
         }
@@ -267,6 +278,12 @@ namespace Ambilight.DesktopDuplication
                 {
                     if (Interlocked.Exchange(ref _reinitRequested, 0) == 1)
                         ForceReinitialize();
+
+                    if (_suspended && _resumeAt.HasValue && DateTime.UtcNow >= _resumeAt.Value)
+                    {
+                        _suspended = false;
+                        _resumeAt = null;
+                    }
 
                     UpdateScreensaverState();
                     FollowInputDesktop();
