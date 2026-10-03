@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 
 namespace Ambilight.Lights
 {
@@ -36,6 +37,10 @@ namespace Ambilight.Lights
         internal int FpsCap = int.MaxValue;   // Yeelight: lowered when this bulb keeps closing its session (a weak bulb or Wi-Fi link)
         internal DateTime LinkSince;
         internal int LastSentRgb = -1;       // Govee: last color; Yeelight: last (color, brightness) pair as one number
+        // Yeelight only: timestamps of recent commands, for the real device quota (60/min) - see
+        // Engine.CanSendYeelight. A queue, not a counter, so the 60 s window actually rolls instead of resetting
+        // in a hard step every minute.
+        internal readonly Queue<DateTime> YeelightSendTimes = new Queue<DateTime>();
         internal bool YeelightOff;            // Yeelight: turned off because the mapped part of the screen is black
         internal bool YeelightFading;         // Yeelight: fading out just before switching off
         internal DateTime YeelightFadeStart;
@@ -126,9 +131,15 @@ namespace Ambilight.Lights
 
             _loop = new Thread(Loop) { IsBackground = true, Name = "Light color loop" };
             _scanner = new Thread(ScanLoop) { IsBackground = true, Name = "Light discovery" };
+
+            // A bulb's IP can change across a long sleep/hibernate (DHCP lease renewal) - one rescan right after
+            // resume lets an already-paired bulb find its new address on its own, without the user having to
+            // click "Search again" themselves. Just once per resume, not a recurring poll.
+            SystemEvents.PowerModeChanged += (s, e) => { if (e.Mode == PowerModes.Resume) _scanNow.Set(); };
+            SystemEvents.SessionSwitch += (s, e) => { if (e.Reason == SessionSwitchReason.SessionUnlock) _scanNow.Set(); };
         }
 
-        public void Start() { _loop.Start(); _scanner.Start(); }
+        public void Start() { _loop.Start(); _scanner.Start(); _scanNow.Set(); }
 
         public List<BulbState> Bulbs { get { lock (_bulbs) return new List<BulbState>(_bulbs); } }
 
@@ -252,20 +263,21 @@ namespace Ambilight.Lights
             set { _config.YeelightFadeMs = Math.Max(0, Math.Min(1500, value)); ScheduleSave(); }
         }
 
-        /// <summary>Color updates per second sent to each Yeelight bulb. Capped well below the bulb's real LAN
-        /// Control quota (60 commands/min, ~1/s, per TCP session) - going much above it gets the session killed by
-        /// the bulb itself after a few seconds, not just throttled.</summary>
+        /// <summary>Max burst pace for Yeelight color updates - how quickly it reacts to a scene change. The real
+        /// hardware limit (60 commands/min per session, see <see cref="CanSendYeelight"/>) is enforced separately
+        /// and always wins, so this can no longer be set high enough to get a session killed by the bulb.</summary>
         public int YeelightFps
         {
             get { return Math.Max(1, Math.Min(10, _config.YeelightFps)); }
             set { _config.YeelightFps = Math.Max(1, Math.Min(10, value)); ScheduleSave(); }
         }
 
-        /// <summary>Color updates per second sent to each Govee device (Govee devices start to choke above ~25/s).</summary>
+        /// <summary>Color updates per second sent to each Govee device. Capped at the device's own documented
+        /// ceiling (chokes above ~25/s) - the old 30 max/default sat past that on every install.</summary>
         public int GoveeFps
         {
-            get { return Math.Max(1, Math.Min(30, _config.GoveeFps)); }
-            set { _config.GoveeFps = Math.Max(1, Math.Min(30, value)); ScheduleSave(); }
+            get { return Math.Max(1, Math.Min(25, _config.GoveeFps)); }
+            set { _config.GoveeFps = Math.Max(1, Math.Min(25, value)); ScheduleSave(); }
         }
 
         // ---- changes made from the UI ----
@@ -439,36 +451,47 @@ namespace Ambilight.Lights
 
         // ---- discovery ----
 
+        // Govee has no persistent session - a device only stays "alive" for GoveeAliveWindow (45 s) after its
+        // last answer to a scan broadcast, so this one keeps running on its own regardless of anything below.
+        // It is a cheap single UDP packet, nothing like the Yeelight SSDP search's 3 s blocking multicast wait.
+        static readonly TimeSpan GoveeHeartbeat = TimeSpan.FromSeconds(20);
+
         void ScanLoop()
         {
             while (!_stop)
             {
-                try
-                {
-                    Scanning = true;
-                    _govee.Refresh();
-                    _govee.Scan();                              // Govee answers arrive on their own threads...
-                    var found = Discovery.Scan(3000);           // ...while Yeelight is searched (blocks ~3 s)
-                    _govee.Scan();
-                    Scanning = false;
-                    LastScan = DateTime.Now;
-                    Merge(found);
-                }
-                catch (Exception e) { Scanning = false; Log.Error("Discovery failed.", e); }
-
-                // Search often while something is missing; once everything is connected keep looking
-                // every 15 s so a device that is added (or comes back) shows up almost immediately.
-                int waitMs = AnythingMissing() ? 4000 : 15000;
-                _scanNow.Wait(waitMs);
+                // Only an explicit trigger (the "Search again" button, the one-shot scan at Start(), or a
+                // resume-from-suspend) runs the full Yeelight SSDP search - it used to also fire every 4-15 s on
+                // its own forever, which meant constant multicast traffic and, worse, kept forcing a reconnect
+                // cycle (and its SetPower/SetBrightness resend) on any bulb that was not currently reachable -
+                // exactly the "spam" that made a flaky bulb's sessions churn instead of just backing off quietly.
+                bool signaled = _scanNow.Wait(GoveeHeartbeat);
                 _scanNow.Reset();
-            }
-        }
 
-        bool AnythingMissing()
-        {
-            foreach (var b in Bulbs)
-                if (b.Config.Controlled && b.Status != BulbStatus.Connected) return true;
-            return false;
+                if (_stop) return;
+
+                if (signaled)
+                {
+                    try
+                    {
+                        Scanning = true;
+                        _govee.Refresh();
+                        _govee.Scan();                              // Govee answers arrive on their own threads...
+                        var found = Discovery.Scan(3000);           // ...while Yeelight is searched (blocks ~3 s)
+                        _govee.Scan();
+                        Scanning = false;
+                        LastScan = DateTime.Now;
+                        Merge(found);
+                    }
+                    catch (Exception e) { Scanning = false; Log.Error("Discovery failed.", e); }
+                }
+                else
+                {
+                    // Just the Govee keep-alive heartbeat - no Yeelight SSDP search, no new-device merge.
+                    try { _govee.Refresh(); _govee.Scan(); }
+                    catch (Exception e) { Log.Warn("Govee keep-alive scan failed: " + e.Message); }
+                }
+            }
         }
 
         BulbState FindState(string id)
@@ -609,6 +632,25 @@ namespace Ambilight.Lights
             }
         }
 
+        // Yeelight's own LAN Control firmware enforces at most 60 commands per rolling 60 s window per session -
+        // go over it and the bulb kills the session itself (not a graceful throttle). The old code only paced
+        // sends by a flat "FPS" setting with no awareness of this real budget, so a lively scene (default 8
+        // "frames"/s) blew through the 60/min allowance in well under ten seconds, every session, forever - the
+        // repeated session-killed/reconnect/SetPower(true) churn that follows is almost certainly what was
+        // hammering the bulb. A rolling window here is the actual hardware limit, independent of whatever FPS the
+        // user picks in Settings: bursts are still allowed (reacts fast to a scene change) but the 60 s total can
+        // never be exceeded, so the quota can no longer be misconfigured into a violation.
+        const int YeelightQuotaPerMinute = 54;    // a few below the real 60, for clock drift between us and the bulb
+
+        static bool CanSendYeelight(BulbState b, DateTime now)
+        {
+            var q = b.YeelightSendTimes;
+            while (q.Count > 0 && (now - q.Peek()).TotalSeconds >= 60) q.Dequeue();
+            return q.Count < YeelightQuotaPerMinute;
+        }
+
+        static void RecordYeelightSend(BulbState b, DateTime now) { b.YeelightSendTimes.Enqueue(now); }
+
         void TickYeelight(BulbState b, int group, DateTime now)
         {
             var link = b.Link;
@@ -690,15 +732,16 @@ namespace Ambilight.Lights
                 if (t >= 1 || b.YeelightFadeBright <= 1)
                 {
                     // The last step (1% to off) is the one the eye reads as a cut, so the bulb finishes it with its own fade.
-                    if (link.SetPowerOffSmooth(Math.Min(fadeMs, 400))) { b.YeelightOff = true; b.YeelightFading = false; b.LastSentRgb = -1; b.LastSentAt = now; }
+                    if (!CanSendYeelight(b, now)) return;
+                    if (link.SetPowerOffSmooth(Math.Min(fadeMs, 400))) { b.YeelightOff = true; b.YeelightFading = false; b.LastSentRgb = -1; b.LastSentAt = now; RecordYeelightSend(b, now); }
                     else DropLink(b);
                 }
-                else if ((now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps))
+                else if ((now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps) && CanSendYeelight(b, now))
                 {
                     int step = Math.Max(1, (int)Math.Round(b.YeelightFadeBright * (1 - t)));
                     if (step != b.YeelightFadeLastStep)
                     {
-                        if (link.SetColorAndBrightness(b.YeelightFadeColor, step)) { b.YeelightFadeLastStep = step; b.LastSentRgb = -1; b.LastSentAt = now; }
+                        if (link.SetColorAndBrightness(b.YeelightFadeColor, step)) { b.YeelightFadeLastStep = step; b.LastSentRgb = -1; b.LastSentAt = now; RecordYeelightSend(b, now); }
                         else DropLink(b);
                     }
                 }
@@ -707,9 +750,10 @@ namespace Ambilight.Lights
             b.YeelightFading = false;   // the scene is bright again: cancel any fade in progress
             b.YeelightOff = false;      // the next set_scene switches the bulb back on
 
-            if ((key != b.LastSentRgb && (now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps)) || now - b.LastSentAt > KeepAlive)
+            if ((key != b.LastSentRgb && (now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps) && CanSendYeelight(b, now))
+                || (now - b.LastSentAt > KeepAlive && CanSendYeelight(b, now)))
             {
-                if (link.SetColorAndBrightness(b.LastNormColor, bright)) { b.LastSentRgb = key; b.LastSentAt = now; }
+                if (link.SetColorAndBrightness(b.LastNormColor, bright)) { b.LastSentRgb = key; b.LastSentAt = now; RecordYeelightSend(b, now); }
                 else DropLink(b);
             }
         }
@@ -886,8 +930,17 @@ namespace Ambilight.Lights
 
             b.Status = BulbStatus.Unreachable;
             b.Failures++;
-            b.NextAttempt = DateTime.UtcNow.AddSeconds(Math.Min(10, 2 * b.Failures));
-            if (b.Failures >= 2) _scanNow.Set();   // its IP may have changed
+
+            // Real exponential backoff (5s, 10s, 20s... capped at 5 min) instead of the old flat "retry every
+            // ~10 s forever" - a bulb that is actually gone (dying hardware, unplugged) used to get hammered with
+            // a fresh TCP connect attempt (and, once it did connect, a SetPower/SetBrightness resend) every 10
+            // seconds for as long as the app ran, which could be weeks. A brief Wi-Fi blip still recovers quickly;
+            // a bulb that stays unreachable is left alone for minutes at a time instead.
+            int backoffSeconds = Math.Min(300, 5 * (1 << Math.Min(b.Failures - 1, 6)));
+            b.NextAttempt = DateTime.UtcNow.AddSeconds(backoffSeconds);
+
+            // No automatic re-scan here anymore - discovery is manual ("Search again"), startup, or resume-only
+            // now (see ScanLoop). A bulb whose IP genuinely changed mid-session is found again on the next one.
 
             // The bulb answers discovery (we have its current IP from a recent scan) but refuses the control port
             // itself, steadily, for a while - not a Wi-Fi blip. This is the known Yeelight firmware quirk where LAN

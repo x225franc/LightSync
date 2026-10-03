@@ -864,7 +864,7 @@
                         <ui:SymbolIcon Symbol="Gauge24" />
                     </ui:CardControl.Icon>
                     <StackPanel Orientation="Horizontal">
-                        <Slider x:Name="GoveeFpsSlider" Width="150" Minimum="5" Maximum="30" TickFrequency="1"
+                        <Slider x:Name="GoveeFpsSlider" Width="150" Minimum="5" Maximum="25" TickFrequency="1"
                                 IsSnapToTickEnabled="True" VerticalAlignment="Center"
                                 ValueChanged="GoveeFpsSlider_ValueChanged" />
                         <TextBlock x:Name="GoveeFpsText" Width="60" TextAlignment="Right" VerticalAlignment="Center" />

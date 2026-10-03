@@ -233,7 +233,7 @@
                             <Slider
                                 x:Name="_goveeFpsSlider"
                                 Width="200"
-                                Maximum="30"
+                                Maximum="25"
                                 Minimum="1"
                                 ValueChanged="GoveeFpsSlider_ValueChanged" />
                             <TextBlock
