@@ -62,7 +62,7 @@ public partial class LightSyncPage : UiPage
         _yeelightOffBelowSlider.Value = engineForLights?.YeelightOffBelow ?? 0;
         _yeelightFadeMsSlider.Value = engineForLights?.YeelightFadeMs ?? 400;
         _goveeFpsSlider.Value = engineForLights?.GoveeFps ?? 30;
-        _yeelightFpsSlider.Value = engineForLights?.YeelightFps ?? 30;
+        _yeelightFpsSlider.Value = engineForLights?.YeelightFps ?? 1;
 
         _keyboardToggle.IsChecked = _settings.KeyboardEnabled;
         _mouseToggle.IsChecked = _settings.MouseEnabled;

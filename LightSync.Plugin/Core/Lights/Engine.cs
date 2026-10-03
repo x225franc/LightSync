@@ -264,13 +264,15 @@ namespace Ambilight.Lights
             set { _config.YeelightFadeMs = Math.Max(0, Math.Min(1500, value)); ScheduleSave(); }
         }
 
-        /// <summary>Max burst pace for Yeelight color updates - how quickly it reacts to a scene change. The real
-        /// hardware limit (60 commands/min per session, see <see cref="CanSendYeelight"/>) is enforced separately
-        /// and always wins, so this can no longer be set high enough to get a session killed by the bulb.</summary>
+        /// <summary>Max burst pace for Yeelight color updates - how quickly it reacts to a scene change. Capped at
+        /// 2/s on purpose: the bulb's own documented LAN Control limit is 60 commands/min (1/s sustained), and the
+        /// rolling 60s/54-command budget in <see cref="CanSendYeelight"/> is the real, always-on backstop against
+        /// that - but the slider itself must never show (or let the user pick) a number that implies a rate past
+        /// the hardware's real limit, even though the backstop would still catch it.</summary>
         public int YeelightFps
         {
-            get { return Math.Max(1, Math.Min(10, _config.YeelightFps)); }
-            set { _config.YeelightFps = Math.Max(1, Math.Min(10, value)); ScheduleSave(); }
+            get { return Math.Max(1, Math.Min(2, _config.YeelightFps)); }
+            set { _config.YeelightFps = Math.Max(1, Math.Min(2, value)); ScheduleSave(); }
         }
 
         /// <summary>Color updates per second sent to each Govee device. Capped at the device's own documented

@@ -875,7 +875,7 @@
                         <ui:SymbolIcon Symbol="Gauge24" />
                     </ui:CardControl.Icon>
                     <StackPanel Orientation="Horizontal">
-                        <Slider x:Name="YeelightFpsSlider" Width="150" Minimum="1" Maximum="10" TickFrequency="1"
+                        <Slider x:Name="YeelightFpsSlider" Width="150" Minimum="1" Maximum="2" TickFrequency="1"
                                 IsSnapToTickEnabled="True" VerticalAlignment="Center"
                                 ValueChanged="YeelightFpsSlider_ValueChanged" />
                         <TextBlock x:Name="YeelightFpsText" Width="60" TextAlignment="Right" VerticalAlignment="Center" />

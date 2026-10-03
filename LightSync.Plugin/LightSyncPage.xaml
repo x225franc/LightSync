@@ -251,7 +251,7 @@
                             <Slider
                                 x:Name="_yeelightFpsSlider"
                                 Width="200"
-                                Maximum="10"
+                                Maximum="2"
                                 Minimum="1"
                                 ValueChanged="YeelightFpsSlider_ValueChanged" />
                             <TextBlock

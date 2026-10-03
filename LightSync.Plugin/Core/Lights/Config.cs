@@ -131,7 +131,7 @@ namespace Ambilight.Lights
         /// <summary>Maximum color updates per second sent to each Govee device (Chroma itself only produces ~20/s).</summary>
         public int GoveeFps { get; set; } = 25;
         /// <summary>Maximum color updates per second sent to each Yeelight bulb (music mode has no limit of its own).</summary>
-        public int YeelightFps { get; set; } = 8;
+        public int YeelightFps { get; set; } = 1;
         /// <summary>Yeelight bulbs switch off when the scene is darker than this many percent (0 = never switch off).</summary>
         public int YeelightOffBelow { get; set; } = 6;
         /// <summary>How long a Yeelight bulb takes to fade out before switching off in the dark (0 = switch off at once).</summary>
