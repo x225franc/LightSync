@@ -32,11 +32,11 @@ namespace Ambilight.Logic
                 mapHeadset.Dispose();
             }
 
-            ApplyPictureToGrid(saturatedMap);
-            _chroma.Headset.SetCustomAsync(_headsetGrid);
-
-            // Clean up
-            saturatedMap?.Dispose();
+            using (saturatedMap)
+            {
+                ApplyPictureToGrid(saturatedMap);
+                ChromaFrameSender.Send(() => _chroma.Headset.SetCustomAsync(_headsetGrid));
+            }
         }
 
         private void ApplyPictureToGrid(Bitmap map)

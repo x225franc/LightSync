@@ -38,11 +38,11 @@ namespace Ambilight.Logic
                 map.Dispose();
             }
 
-            ApplyPictureToGrid(saturatedMap);
-            _chroma.Keyboard.SetCustomAsync(_keyboardGrid);
-
-            // Clean up
-            saturatedMap?.Dispose();
+            using (saturatedMap)
+            {
+                ApplyPictureToGrid(saturatedMap);
+                ChromaFrameSender.Send(() => _chroma.Keyboard.SetCustomAsync(_keyboardGrid));
+            }
         }
 
         /// <summary>

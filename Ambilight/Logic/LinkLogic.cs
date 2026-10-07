@@ -23,6 +23,7 @@ namespace Ambilight.Logic
         private CustomChromaLinkEffect _linkGrid = CustomChromaLinkEffect.Create();
         private IChroma _chroma;
         private bool _loggedFirstFrame;
+        private readonly object _frameLock = new object();
 
         public LinkLogic(TraySettings settings, IChroma chromaInstance)
         {
@@ -42,6 +43,12 @@ namespace Ambilight.Logic
         /// was not enough (e.g. the accessory was plugged in or woken up after Chroma had already started).</summary>
         public void Kick()
         {
+            try { lock (_frameLock) KickFrame(); }
+            catch (Exception ex) { _log.Error(ex, "ChromaLink kick failed."); }
+        }
+
+        private void KickFrame()
+        {
             for (int i = 0; i < ChromaLinkConstants.MaxLeds; i++)
                 _linkGrid[i] = new ColoreColor((byte)0, (byte)0, (byte)0);
 
@@ -53,6 +60,11 @@ namespace Ambilight.Logic
         /// </summary>
         /// <param name="newImage">ScreenShot</param>
         public void Process(Bitmap newImage)
+        {
+            lock (_frameLock) ProcessFrame(newImage);
+        }
+
+        private void ProcessFrame(Bitmap newImage)
         {
             if (RunColorTestStep()) return;
 
@@ -68,20 +80,20 @@ namespace Ambilight.Logic
             if (saturatedMap != map && map != null)
                 map.Dispose();
 
-            using (var fast = new FastBitmap(saturatedMap))
-                ApplyImageToGrid(fast);
-            _linkGrid[4] = new ColoreColor((byte)0, (byte)0, (byte)0);    // dead LED - never reaches Razer, left dark
-
-            if (!_loggedFirstFrame)
+            using (saturatedMap)
             {
-                _log.Info($"ChromaLink: sending first frame, colors=[{string.Join(", ", Enumerable.Range(0, ChromaLinkConstants.MaxLeds).Select(i => _linkGrid[i].ToString()))}]");
-                _loggedFirstFrame = true;
+                using (var fast = new FastBitmap(saturatedMap))
+                    ApplyImageToGrid(fast);
+                _linkGrid[4] = new ColoreColor((byte)0, (byte)0, (byte)0);    // dead LED - never reaches Razer, left dark
+
+                if (!_loggedFirstFrame)
+                {
+                    _log.Info($"ChromaLink: sending first frame, colors=[{string.Join(", ", Enumerable.Range(0, ChromaLinkConstants.MaxLeds).Select(i => _linkGrid[i].ToString()))}]");
+                    _loggedFirstFrame = true;
+                }
+
+                Send();
             }
-
-            Send();
-
-            // Clean up
-            saturatedMap?.Dispose();
         }
 
         /// <summary>The four equal screen columns (left to right) onto the four LED indices that actually reach Razer.</summary>
@@ -96,19 +108,7 @@ namespace Ambilight.Logic
 
         private void Send()
         {
-            try
-            {
-                var task = _chroma.ChromaLink.SetCustomAsync(_linkGrid);
-                task.ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                        _log.Error(t.Exception, "ChromaLink.SetCustomAsync failed.");
-                });
-            }
-            catch (System.Exception ex)
-            {
-                _log.Error(ex, "ChromaLink.SetCustomAsync threw synchronously.");
-            }
+            ChromaFrameSender.Send(() => _chroma.ChromaLink.SetCustomAsync(_linkGrid));
         }
 
         // ---- group color test: lights exactly one Chroma zone at a time (everything else stays dark), so which

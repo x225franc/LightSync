@@ -211,6 +211,7 @@
     <Compile Include="GUI\ColorWheel.cs" />
     <Compile Include="GUI\DarkContextMenuRenderer.cs" />
     <Compile Include="GUI\TraySettings.cs" />
+    <Compile Include="Logic\ChromaFrameSender.cs" />
     <Compile Include="Logic\HeadsetLogic.cs" />
     <Compile Include="Logic\IDeviceLogic.cs" />
     <Compile Include="Logic\KeyboardLogic.cs" />

@@ -39,11 +39,11 @@ namespace Ambilight.Logic
                 map.Dispose();
             }
 
-            ApplyPictureToGrid(saturatedMap);
-            _chroma.Keypad.SetCustomAsync(_keypadGrid);
-
-            // Clean up
-            saturatedMap?.Dispose();
+            using (saturatedMap)
+            {
+                ApplyPictureToGrid(saturatedMap);
+                ChromaFrameSender.Send(() => _chroma.Keypad.SetCustomAsync(_keypadGrid));
+            }
         }
 
         /// <summary>

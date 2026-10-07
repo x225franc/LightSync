@@ -39,11 +39,11 @@ namespace Ambilight.Logic
                 mapMousePad.Dispose();
             }
 
-            ApplyPictureToGrid(saturatedMap);
-            _chroma.Mousepad.SetCustomAsync(_mousepadGrid);
-
-            // Clean up
-            saturatedMap?.Dispose();
+            using (saturatedMap)
+            {
+                ApplyPictureToGrid(saturatedMap);
+                ChromaFrameSender.Send(() => _chroma.Mousepad.SetCustomAsync(_mousepadGrid));
+            }
         }
 
         /// <summary>

@@ -40,11 +40,11 @@ namespace Ambilight.Logic
                 mapMouse.Dispose();
             }
 
-            ApplyPictureToGrid(saturatedMap);
-            _chroma.Mouse.SetGridAsync(_mouseGrid);
-
-            // Clean up
-            saturatedMap?.Dispose();
+            using (saturatedMap)
+            {
+                ApplyPictureToGrid(saturatedMap);
+                ChromaFrameSender.Send(() => _chroma.Mouse.SetGridAsync(_mouseGrid));
+            }
         }
 
         /// <summary>

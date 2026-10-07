@@ -305,7 +305,9 @@ namespace Ambilight.Lights
             if (!bulb.Config.Controlled) bulb.Status = BulbStatus.NotControlled;
             else if (bulb.Status == BulbStatus.NotControlled) { bulb.Status = bulb.Ip == null ? BulbStatus.Searching : BulbStatus.Connecting; bulb.NextAttempt = DateTime.MinValue; }
             bulb.LastSentRgb = -1;
-            bulb.GoveeReady = false; bulb.GoveeInitStep = 0;
+            // A group/canvas change only needs a new color, not a power/stream reset.
+            if (!bulb.GoveeStreaming) { bulb.GoveeReady = false; bulb.GoveeInitStep = 0; }
+            bulb.LastSentAt = DateTime.MinValue;
         }
 
         public void SetBrightness(BulbState bulb, int percent)
@@ -762,20 +764,30 @@ namespace Ambilight.Lights
 
         void TickGovee(BulbState b, int group, DateTime now)
         {
-            // Govee LAN is connectionless: a device is "connected" while it keeps answering the network search.
+            // Discovery replies are not stream acknowledgements. A lost multicast reply must not
+            // stop an established unicast stream or cause a power/brightness reset on recovery.
             if (Interlocked.Read(ref b.LastSeenTicks) == 0) { b.Status = BulbStatus.Searching; return; }
             bool alive = now - new DateTime(Interlocked.Read(ref b.LastSeenTicks), DateTimeKind.Utc) < GoveeAliveWindow;
             if (!alive)
             {
-                b.GoveeReady = false; b.GoveeInitStep = 0;
-                b.GoveeStreaming = false;
                 if (b.Status != BulbStatus.Unreachable)
                 {
-                    Log.Info("Govee " + b.Ip + " is not answering.");
-                    b.Error = "no answer to the network search";
+                    Log.Info("Govee " + b.Ip + " is not answering discovery; preserving the existing color stream.");
+                    b.Error = "no discovery reply; stream delivery is unconfirmed";
                     b.Status = BulbStatus.Unreachable;
                 }
-                return;
+                // A never-initialized device still needs discovery before it can be started.
+                if (!b.GoveeReady) return;
+            }
+            else if (b.GoveeReady && b.Status == BulbStatus.Unreachable)
+            {
+                // The device may have rebooted while silent: reassert stream mode without turning
+                // it on or resetting brightness, then immediately send the current colors.
+                if (!_govee.RazerMode(b.Ip, b.LocalIp, true)) return;
+                b.LastSentAt = DateTime.MinValue;
+                b.Error = null;
+                b.Status = BulbStatus.Connected;
+                Log.Info("Govee " + b.Ip + " discovery recovered; resuming without a power reset.");
             }
 
             // Govee always uses the real-time Razer stream: the plain color command is far less smooth.
@@ -784,24 +796,30 @@ namespace Ambilight.Lights
                 // The device drops commands that arrive back to back, so each step waits ~0.4 s for the previous one.
                 if (b.GoveeInitStep == 0)
                 {
-                    // Wake the device at the minimum brightness: it comes back in its last state (often plain white), and
-                    // that must not be visible at full brightness while the stream starts. The brightness is faded in below.
-                    if (!_govee.Turn(b.Ip, b.LocalIp, true) || !_govee.Brightness(b.Ip, b.LocalIp, 1)) return;
+                    // Dim before power-on, and separate the commands: back-to-back UDP commands
+                    // can be dropped, exposing the device's previous (often white) state.
+                    if (!_govee.Brightness(b.Ip, b.LocalIp, 1)) return;
                     b.GoveeInitStep = 1; b.GoveeInitAt = now;
                     return;
                 }
                 if ((now - b.GoveeInitAt).TotalMilliseconds < 400) return;
                 if (b.GoveeInitStep == 1)
                 {
-                    _govee.RazerMode(b.Ip, b.LocalIp, true);
-                    b.GoveeStreaming = true;
+                    if (!_govee.Turn(b.Ip, b.LocalIp, true)) return;
                     b.GoveeInitStep = 2; b.GoveeInitAt = now;
+                    return;
+                }
+                if (b.GoveeInitStep == 2)
+                {
+                    if (!_govee.RazerMode(b.Ip, b.LocalIp, true)) return;
+                    b.GoveeStreaming = true;
+                    b.GoveeInitStep = 3; b.GoveeInitAt = now;
                     return;
                 }
                 b.GoveeReady = true;
                 b.BrightnessDirty = false;
                 b.GoveeRamp = 0;
-                b.GoveeRampAt = now.AddMilliseconds(1200);      // let the first frames land, then fade the brightness in
+                b.GoveeRampAt = DateTime.MaxValue;            // start fading only after a color frame was actually sent
                 b.LastSentRgb = -1;
                 b.Error = null;
                 b.Status = BulbStatus.Connected;
@@ -855,6 +873,8 @@ namespace Ambilight.Lights
                 b.CurrentRgb = rgb;
                 if (due && _govee.Segments(b.Ip, b.LocalIp, rgb, SegmentsOf(b))) { b.LastSentRgb = rgb; b.LastSentAt = now; b.LastStreamRgb = rgb; }   // a steady stream, like Govee Desktop
             }
+            if (b.GoveeRampAt == DateTime.MaxValue && b.LastSentAt == now)
+                b.GoveeRampAt = now.AddMilliseconds(1200);
         }
 
         static int Average(int[] colors)
@@ -905,9 +925,11 @@ namespace Ambilight.Lights
                 link = new MusicLink(b.Ip, b.Port, b.LocalIp);
                 if (link.Open())
                 {
-                    link.SetPower(true);
-                    link.SetBrightness(b.Config.Brightness);
+                    // Do not wake the bulb in its old color. TickYeelight's first set_scene
+                    // applies the actual color and brightness together and switches it on.
+                    // If capture is paused or no color is ready, leave its state untouched.
                     b.LastSentRgb = -1;
+                    b.LastSentAt = DateTime.MinValue;
                     b.Failures = 0;
                     b.Error = null;
                     b.Link = link;
