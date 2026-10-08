@@ -184,7 +184,7 @@ namespace Ambilight.Logic
         /// <summary>Stops the capture thread so a fresh LogicManager can be created (e.g. a plugin restart)
         /// without fighting this one over the single DXGI desktop duplication session. The Chroma connection
         /// itself is left to become unreferenced along with everything else once this instance is dropped.</summary>
-        public void Stop() { _reader?.Stop(); _openRgb?.Stop(); }
+        public void Stop() { _reader?.Stop(); _openRgb?.Stop(); _lampArrayLogic?.Stop(); }
 
         private void SafeProcess(string device, IDeviceLogic logic, Bitmap img)
         {

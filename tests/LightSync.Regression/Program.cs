@@ -137,13 +137,30 @@ internal static class Program
         ChromaFrameSender.Send(() => Task.CompletedTask); // Lock must be released after failure.
     }
 
+    private static void TestKeyboardResume()
+    {
+        var recovery = new LampArrayRecovery();
+        Assert(!recovery.ShouldReopen(TimeSpan.FromHours(1), false), "Normal priority loss must not reopen the keyboard");
+        recovery.Begin(TimeSpan.Zero);
+        Assert(!recovery.ShouldReopen(TimeSpan.FromSeconds(30), false), "Windows was not allowed time to grant control");
+        Assert(recovery.ShouldReopen(TimeSpan.FromSeconds(45), false), "A stale post-resume handle was never reopened");
+        Assert(!recovery.ShouldReopen(TimeSpan.FromSeconds(46), false), "Rediscovery retries caused a tight loop");
+        Assert(!recovery.ShouldReopen(TimeSpan.FromSeconds(50), true), "An available keyboard was unnecessarily reopened");
+        Assert(!recovery.ShouldReopen(TimeSpan.FromSeconds(51), false), "A transient foreground priority change triggered rediscovery");
+        Assert(recovery.ShouldReopen(TimeSpan.FromSeconds(96), false), "Foreground-only availability prevented recovery of background control");
+        Assert(!recovery.ShouldReopen(TimeSpan.FromMinutes(4), false), "Retries continued indefinitely against Windows priority");
+        recovery.Begin(TimeSpan.FromMinutes(5));
+        Assert(recovery.ShouldReopen(TimeSpan.FromSeconds(345), false), "A second hibernation did not reset recovery");
+    }
+
     public static void Main()
     {
+        TestKeyboardResume();
         TestDiscoveryLoss();
         TestGoveeStartup();
         TestGoveeWaitForColor();
         TestYeelightReconnect();
         TestChromaWrites();
-        Console.WriteLine("PASS: discovery loss/recovery, Govee startup pacing/failure, Yeelight reconnect/pause, Chroma serialization/errors.");
+        Console.WriteLine("PASS: keyboard resume recovery, discovery loss/recovery, Govee startup pacing/failure, Yeelight reconnect/pause, Chroma serialization/errors.");
     }
 }

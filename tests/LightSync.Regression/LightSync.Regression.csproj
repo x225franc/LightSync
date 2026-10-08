@@ -13,5 +13,6 @@
     <Compile Include="$(CoreRoot)/Lights/Engine.cs" Link="Engine.cs" />
     <Compile Include="$(CoreRoot)/Lights/ScreenState.cs" Link="ScreenState.cs" />
     <Compile Include="$(CoreRoot)/Logic/ChromaFrameSender.cs" Link="ChromaFrameSender.cs" />
+    <Compile Include="$(CoreRoot)/Logic/LampArrayRecovery.cs" Link="LampArrayRecovery.cs" />
   </ItemGroup>
 </Project>

@@ -46,7 +46,6 @@ namespace Ambilight.Logic
         private const ushort RazerVendorId = 0x1532;
         private const int GridWidth = 44;
         private const int GridHeight = 16;
-        private static readonly TimeSpan RetryDiscoveryInterval = TimeSpan.FromSeconds(30);
 
         /// <summary>Human readable state, shown in the settings window.</summary>
         public static volatile string CurrentStatus = "Starting...";
@@ -68,8 +67,11 @@ namespace Ambilight.Logic
         private volatile WinColor[] _screenColors;
 
         // Set from the SystemEvents callback thread (a foreign thread), only ever read/cleared by the
-        // sender thread - the cached LampArray handle itself stays single-threaded (see ForceRediscovery).
-        private volatile bool _rediscoverRequested;
+        // sender thread - the cached LampArray handle itself stays single-threaded.
+        private int _rediscoverRequested;
+        private volatile bool _suspended;
+        private readonly ManualResetEventSlim _stopped = new ManualResetEventSlim(false);
+        private readonly LampArrayRecovery _recovery = new LampArrayRecovery();
 
         public LampArrayLogic(TraySettings settings)
         {
@@ -87,8 +89,13 @@ namespace Ambilight.Logic
 
         private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
-            if (e.Mode == PowerModes.Resume)
+            if (e.Mode == PowerModes.Suspend)
+                _suspended = true;
+            else if (e.Mode == PowerModes.Resume)
+            {
+                _suspended = false;
                 RequestRediscovery("system resumed");
+            }
         }
 
         private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
@@ -100,7 +107,7 @@ namespace Ambilight.Logic
         private void RequestRediscovery(string why)
         {
             _log.Info($"Dynamic Lighting keyboard: {why}, forcing rediscovery in case the cached handle went stale.");
-            _rediscoverRequested = true;
+            Interlocked.Exchange(ref _rediscoverRequested, 1);
         }
 
         /// <summary>Called for each captured frame; only prepares screen colors.</summary>
@@ -147,59 +154,103 @@ namespace Ambilight.Logic
         [DllImport("winmm.dll")]
         private static extern uint timeBeginPeriod(uint milliseconds);
 
+        [DllImport("winmm.dll")]
+        private static extern uint timeEndPeriod(uint milliseconds);
+
+        public void Stop()
+        {
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
+            _stopped.Set();
+        }
+
+        // Always release ownership before abandoning a handle. A stale enabled
+        // client can otherwise retain a background lighting request after resume.
+        private void ReleaseKeyboard()
+        {
+            var previous = _lampArray;
+            _lampArray = null;
+            _loggedFirstFrame = false;
+            _lastLoggedAvailability = false;
+            try { if (previous != null) previous.IsEnabled = false; }
+            catch (Exception ex) { _log.Debug("Could not release the previous Dynamic Lighting keyboard: " + ex.Message); }
+        }
+
         private void SenderLoop()
         {
             timeBeginPeriod(1);
 
             var nextTick = _clock.Elapsed;
 
-            while (true)
+            try
             {
-                TimeSpan interval = TimeSpan.FromMilliseconds(100);
-
-                try
+                while (!_stopped.IsSet)
                 {
-                    if (_rediscoverRequested)
+                    TimeSpan interval = TimeSpan.FromMilliseconds(100);
+
+                    try
                     {
-                        _rediscoverRequested = false;
-                        _lampArray = null;
-                        _nextDiscovery = DateTime.MinValue;
+                        if (Interlocked.Exchange(ref _rediscoverRequested, 0) != 0)
+                        {
+                            ReleaseKeyboard();
+                            _recovery.Begin(_clock.Elapsed);
+                            // HID devices and the Windows ambient lighting server are
+                            // still restarting when Resume/SessionUnlock is raised.
+                            _nextDiscovery = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                        }
+
+                        if (_suspended || !_settings.LaptopKeyboardEnabled)
+                        {
+                            ReleaseKeyboard();
+                            CurrentStatus = _suspended ? "Waiting for system resume" : "Disabled";
+                            _stopped.Wait(100);
+                            nextTick = _clock.Elapsed;
+                            continue;
+                        }
+
+                        var lampArray = _lampArray;
+                        if (lampArray == null)
+                        {
+                            CurrentStatus = "Keyboard not found";
+                            if (DateTime.UtcNow >= _nextDiscovery)
+                                DiscoverAsync().GetAwaiter().GetResult();
+                        }
+                        else
+                        {
+                            if (_recovery.ShouldReopen(_clock.Elapsed, lampArray.IsAvailable))
+                            {
+                                _log.Info("Dynamic Lighting control did not recover after resume; releasing and reopening the keyboard.");
+                                ReleaseKeyboard();
+                                _nextDiscovery = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                                continue;
+                            }
+                            SendFrame(lampArray);
+
+                            // The keyboard's own minimum update interval is the fastest it accepts.
+                            interval = _settings.LaptopEffect == LaptopKeyboardEffect.SolidColor
+                                ? TimeSpan.FromMilliseconds(250)
+                                : _minUpdateInterval;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Warn(ex, "Dynamic Lighting keyboard error, will rediscover it.");
+                        ReleaseKeyboard();
+                        _nextDiscovery = DateTime.UtcNow + TimeSpan.FromSeconds(5);
                     }
 
-                    var lampArray = _lampArray;
-                    if (lampArray == null)
-                    {
-                        CurrentStatus = "Keyboard not found";
-                        if (DateTime.UtcNow >= _nextDiscovery)
-                            DiscoverAsync().GetAwaiter().GetResult();
-                    }
-                    else if (_settings.LaptopKeyboardEnabled)
-                    {
-                        SendFrame(lampArray);
-
-                        // The keyboard's own minimum update interval is the fastest it accepts.
-                        interval = _settings.LaptopEffect == LaptopKeyboardEffect.SolidColor
-                            ? TimeSpan.FromMilliseconds(250)
-                            : _minUpdateInterval;
-                    }
+                    nextTick += interval;
+                    var wait = nextTick - _clock.Elapsed;
+                    if (wait > TimeSpan.Zero)
+                        _stopped.Wait(wait);
                     else
-                    {
-                        CurrentStatus = "Disabled";
-                    }
+                        nextTick = _clock.Elapsed; // fell behind: don't try to catch up with a burst
                 }
-                catch (Exception ex)
-                {
-                    _log.Warn(ex, "Dynamic Lighting keyboard error, will rediscover it.");
-                    _lampArray = null;
-                    _nextDiscovery = DateTime.UtcNow + RetryDiscoveryInterval;
-                }
-
-                nextTick += interval;
-                var wait = nextTick - _clock.Elapsed;
-                if (wait > TimeSpan.Zero)
-                    Thread.Sleep(wait);
-                else
-                    nextTick = _clock.Elapsed; // fell behind: don't try to catch up with a burst
+            }
+            finally
+            {
+                ReleaseKeyboard();
+                timeEndPeriod(1);
             }
         }
 
@@ -319,7 +370,7 @@ namespace Ambilight.Logic
             _lastLoggedAvailability = available;
             _log.Info((available
                 ? "Laptop keyboard is now under our control (Dynamic Lighting)."
-                : "Laptop keyboard control lost (another app has priority in Windows Dynamic Lighting settings).")
+                : "Laptop keyboard control unavailable (Windows priority or lighting service recovery).")
                 + " Foreground app: " + DescribeForegroundApp());
         }
 
@@ -398,12 +449,12 @@ namespace Ambilight.Logic
                 }
 
                 _log.Info("No non-Razer Dynamic Lighting keyboard found.");
-                _nextDiscovery = DateTime.UtcNow + RetryDiscoveryInterval;
+                _nextDiscovery = DateTime.UtcNow + TimeSpan.FromSeconds(5);
             }
             catch (Exception ex)
             {
                 _log.Warn(ex, "Dynamic Lighting discovery failed.");
-                _nextDiscovery = DateTime.UtcNow + RetryDiscoveryInterval;
+                _nextDiscovery = DateTime.UtcNow + TimeSpan.FromSeconds(5);
             }
         }
     }
