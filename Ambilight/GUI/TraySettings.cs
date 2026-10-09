@@ -447,8 +447,8 @@ namespace Ambilight.GUI
         }
 
         /// <summary>
-        /// Sets the monitor to capture. Takes effect after a restart, since the
-        /// desktop duplicator is built once per adapter/output at startup.
+        /// Sets the monitor to capture for this session. Applied by the capture loop;
+        /// the next application launch starts on the Windows primary again.
         /// </summary>
         public void SetMonitor(int index)
         {

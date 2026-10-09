@@ -44,6 +44,8 @@ namespace Ambilight.Logic
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
+            // Always start on the Windows primary, regardless of the saved selection.
+            settings.SelectedMonitor = Math.Max(0, Array.FindIndex(System.Windows.Forms.Screen.AllScreens, screen => screen.Primary));
             this.StartLogic(settings);
         }
 

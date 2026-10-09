@@ -389,16 +389,7 @@ namespace Ambilight.GUI
 
             _settings.SetMonitor(MonitorCombo.SelectedIndex);
 
-            var result = MessageBox.Show(
-                "The application must be restarted to apply this change. Do you want to restart now?",
-                "Restart required",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                _settings.RestartApplication();
-            }
+            StatusText.Text = "Capture monitor changed.";
         }
 
         private void IdentifyGroupsButton_Click(object sender, RoutedEventArgs e)

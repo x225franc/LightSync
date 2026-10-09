@@ -19,6 +19,10 @@ namespace Ambilight.DesktopDuplication
         // touching DXGI entirely instead of spinning against a dead device
         // (this is both a crash source and a needless CPU sink).
         private volatile bool _suspended;
+        private int _captureMonitorIndex;
+        private bool _followPrimary = true;
+        private int _refreshPrimary;
+
 
         // The screensaver engaging/disengaging doesn't reliably raise
         // SystemEvents.SessionSwitch/PowerModeChanged when this app has no
@@ -66,6 +70,7 @@ namespace Ambilight.DesktopDuplication
         {
             this._logic = logic;
             this.settings = settings;
+            _captureMonitorIndex = settings.SelectedMonitor;
 
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -129,6 +134,7 @@ namespace Ambilight.DesktopDuplication
             // description is now stale, so force a clean recreation on the next
             // frame rather than letting the next AcquireNextFrame call fail.
             _log.Debug("Display settings changed, forcing desktop duplicator reinitialization.");
+            Interlocked.Exchange(ref _refreshPrimary, 1);
             RequestReinitialize();
         }
 
@@ -286,6 +292,17 @@ namespace Ambilight.DesktopDuplication
             {
                 while (!token.IsCancellationRequested)
                 {
+                    if (settings.SelectedMonitor != _captureMonitorIndex)
+                    {
+                        _followPrimary = false;
+                        _captureMonitorIndex = settings.SelectedMonitor;
+                        RequestReinitialize();
+                    }
+                    if (Interlocked.Exchange(ref _refreshPrimary, 0) != 0 && _followPrimary)
+                    {
+                        settings.SelectedMonitor = Math.Max(0, Array.FindIndex(System.Windows.Forms.Screen.AllScreens, screen => screen.Primary));
+                        _captureMonitorIndex = settings.SelectedMonitor;
+                    }
                     if (Interlocked.Exchange(ref _reinitRequested, 0) == 1)
                         ForceReinitialize();
 
@@ -406,7 +423,12 @@ namespace Ambilight.DesktopDuplication
         {
             if (_desktopDuplicator == null)
             {
-                _desktopDuplicator = new DesktopDuplicator(0, settings.SelectedMonitor);
+                var screens = System.Windows.Forms.Screen.AllScreens;
+                int index = settings.SelectedMonitor;
+                var screen = index >= 0 && index < screens.Length ? screens[index] : System.Windows.Forms.Screen.PrimaryScreen;
+                if (screen == null) throw new DesktopDuplicationException("No Windows display is available.");
+                _desktopDuplicator = new DesktopDuplicator(screen.DeviceName);
+                _log.Info("Capturing Windows display " + screen.DeviceName + (screen.Primary ? " (primary)." : "."));
             }
 
             return _desktopDuplicator.GetLatestFrame(reusableBitmap);

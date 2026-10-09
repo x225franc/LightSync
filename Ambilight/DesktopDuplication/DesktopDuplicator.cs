@@ -78,6 +78,36 @@ namespace Ambilight.DesktopDuplication
             }
         }
 
+        public DesktopDuplicator(string deviceName) : this(FindOutput(deviceName)) { }
+
+        private DesktopDuplicator(int[] output) : this(output[0], output[1]) { }
+
+        // Windows Screen indices are not DXGI output indices, particularly on laptops
+        // with an integrated GPU and external monitors connected to another adapter.
+        private static int[] FindOutput(string deviceName)
+        {
+            using (var factory = new Factory1())
+            {
+                var adapters = factory.Adapters1;
+                try
+                {
+                    for (int a = 0; a < adapters.Length; a++)
+                    {
+                        var outputs = adapters[a].Outputs;
+                        try
+                        {
+                            for (int o = 0; o < outputs.Length; o++)
+                                if (string.Equals(outputs[o].Description.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
+                                    return new[] { a, o };
+                        }
+                        finally { foreach (var output in outputs) output.Dispose(); }
+                    }
+                }
+                finally { foreach (var adapter in adapters) adapter.Dispose(); }
+            }
+            throw new DesktopDuplicationException("Could not find the Windows display " + deviceName + ".");
+        }
+
         private readonly FpsLogger _desktopFrameLogger = new FpsLogger("DesktopDuplication");
 
         /// <summary>
