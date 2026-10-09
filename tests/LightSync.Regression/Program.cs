@@ -153,8 +153,62 @@ internal static class Program
         Assert(recovery.ShouldReopen(TimeSpan.FromSeconds(345), false), "A second hibernation did not reset recovery");
     }
 
+    private static void TestFrozenLights()
+    {
+        var now = DateTime.UtcNow;
+        try
+        {
+            using (var engine = Create(Kinds.Govee))
+            {
+                var bulb = engine.Bulbs[0];
+                bulb.GoveeReady = bulb.GoveeStreaming = true;
+                bulb.GoveeRamp = 3;
+                bulb.LastSeenTicks = now.Ticks;
+                bulb.Config.UseScreenPosition = true;
+                bulb.ScreenRgb = 0x008000;
+                bulb.ScreenColors = new[] { 0xFF0000, 0x0000FF };
+                Invoke(engine, "TickGovee", bulb, 1, now);
+                ScreenState.CapturePaused = true;
+                bulb.ScreenColors[0] = 0xFFFFFF;
+                bulb.ScreenRgb = 0xFFFFFF;
+                GoveeNet.Latest.Calls.Clear();
+                Invoke(engine, "TickGovee", bulb, 1, now.AddSeconds(1));
+                Assert(GoveeNet.Latest.LastGradient.SequenceEqual(new[] { 0xFF0000, 0x0000FF }), "Pause lost or changed the accepted gradient");
+                Assert(GoveeNet.Latest.Calls.SequenceEqual(new[] { "gradient" }), "Paused keepalive changed brightness/power");
+                bulb.Status = BulbStatus.Unreachable;
+                GoveeNet.Latest.Calls.Clear();
+                Invoke(engine, "TickGovee", bulb, 1, now.AddSeconds(2));
+                Assert(GoveeNet.Latest.Calls.SequenceEqual(new[] { "mode:True", "gradient" }), "Discovery recovery did not immediately restore the frozen frame");
+                ScreenState.CapturePaused = false;
+                Invoke(engine, "TickGovee", bulb, 1, now.AddSeconds(3));
+                Assert(GoveeNet.Latest.LastGradient[0] == 0xFFFFFF, "Resume did not apply the live frame");
+            }
+            using (var engine = Create(Kinds.Yeelight))
+            {
+                var bulb = engine.Bulbs[0];
+                Invoke(engine, "ConnectYeelight", bulb);
+                Invoke(engine, "TickYeelight", bulb, 1, now);
+                int frozen = bulb.LastYeelightScene;
+                ScreenState.CapturePaused = true;
+                engine.SetLocalZoneRgb(0xFFFFFF, 0, 0, 0);
+                bulb.Link.Calls.Clear();
+                Invoke(engine, "TickYeelight", bulb, 1, now.AddSeconds(11));
+                Assert(bulb.Link.Calls.SequenceEqual(new[] { $"scene:{frozen & 0xFFFFFF}:{(frozen >> 24) & 0x7F}" }), "Yeelight pause did not preserve color and brightness");
+                Invoke(engine, "ConnectYeelight", bulb);
+                Invoke(engine, "TickYeelight", bulb, 1, now.AddSeconds(12));
+                Assert(bulb.Link.Calls.Count == 1 && bulb.LastSentRgb == frozen, "Reconnect lost the frozen Yeelight scene");
+                bulb.YeelightOff = true;
+                bulb.Link.Calls.Clear();
+                Invoke(engine, "TickYeelight", bulb, 1, now.AddSeconds(30));
+                Assert(bulb.Link.Calls.Count == 0, "Paused keepalive woke an off bulb");
+            }
+        }
+        finally { ScreenState.CapturePaused = false; }
+    }
+
     public static void Main()
     {
+        TestFrozenLights();
         TestKeyboardResume();
         TestDiscoveryLoss();
         TestGoveeStartup();

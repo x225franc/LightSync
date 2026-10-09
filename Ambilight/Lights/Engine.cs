@@ -52,6 +52,8 @@ namespace Ambilight.Lights
         internal long LastSeenTicks;          // Govee only: last time the device answered the network search
         internal bool GoveeReady;             // Govee only: powered on and brightness applied since control started
         internal bool GoveeStreaming;         // Govee only: the device is currently in Razer stream mode
+        internal int LastYeelightScene = -1; // Last successfully sent scene, retained across reconnects.
+        internal int[] LastStreamColors; // Exact last successful Govee frame, including gradients.
         internal int LastStreamRgb = -1;      // Govee only: the last color streamed (average for a gradient), frozen when control stops
         internal int GoveeRamp = 3;           // Govee only: brightness fade-in progress after a start (3 = done)
         internal DateTime GoveeRampAt;
@@ -686,7 +688,23 @@ namespace Ambilight.Lights
             // Screen capture itself is paused (screensaver, lock, suspend): freeze at the last color instead of
             // reacting to whatever Chroma Connect/the canvas does or doesn't send meanwhile. The reconnect logic
             // above still runs, so the session stays warm; only the color (and the dark/off fade) stops moving.
-            if (ScreenState.CapturePaused) return;
+            if (ScreenState.CapturePaused)
+            {
+                // Keep the last successful scene alive, never sample the current
+                // Chroma/canvas values or restart a dark/off fade during a pause.
+                if (!b.YeelightOff && b.LastYeelightScene >= 0 && now - b.LastSentAt >= KeepAlive && CanSendYeelight(b, now))
+                {
+                    int scene = b.LastYeelightScene;
+                    if (link.SetColorAndBrightness(scene & 0xFFFFFF, (scene >> 24) & 0x7F))
+                    {
+                        b.LastSentRgb = scene;
+                        b.LastSentAt = now;
+                        RecordYeelightSend(b, now);
+                    }
+                    else DropLink(b);
+                }
+                return;
+            }
 
             if (b.BrightnessDirty) { b.BrightnessDirty = false; b.LastSentRgb = -1; }    // the new setting is applied with the next color
 
@@ -745,7 +763,7 @@ namespace Ambilight.Lights
                     int step = Math.Max(1, (int)Math.Round(b.YeelightFadeBright * (1 - t)));
                     if (step != b.YeelightFadeLastStep)
                     {
-                        if (link.SetColorAndBrightness(b.YeelightFadeColor, step)) { b.YeelightFadeLastStep = step; b.LastSentRgb = -1; b.LastSentAt = now; RecordYeelightSend(b, now); }
+                        if (link.SetColorAndBrightness(b.YeelightFadeColor, step)) { b.YeelightFadeLastStep = step; b.LastYeelightScene = (step << 24) | b.YeelightFadeColor; b.LastSentRgb = -1; b.LastSentAt = now; RecordYeelightSend(b, now); }
                         else DropLink(b);
                     }
                 }
@@ -757,7 +775,7 @@ namespace Ambilight.Lights
             if ((key != b.LastSentRgb && (now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps) && CanSendYeelight(b, now))
                 || (now - b.LastSentAt > KeepAlive && CanSendYeelight(b, now)))
             {
-                if (link.SetColorAndBrightness(b.LastNormColor, bright)) { b.LastSentRgb = key; b.LastSentAt = now; RecordYeelightSend(b, now); }
+                if (link.SetColorAndBrightness(b.LastNormColor, bright)) { b.LastYeelightScene = key; b.LastSentRgb = key; b.LastSentAt = now; RecordYeelightSend(b, now); }
                 else DropLink(b);
             }
         }
@@ -829,7 +847,17 @@ namespace Ambilight.Lights
 
             // Screen capture itself is paused (screensaver, lock, suspend): freeze at the last color instead of
             // reacting to whatever Chroma Connect/the canvas does or doesn't send meanwhile.
-            if (ScreenState.CapturePaused) return;
+            if (ScreenState.CapturePaused)
+            {
+                // Govee stream mode still needs frames while capture is frozen.
+                // Replay the exact accepted payload; averaging would lose gradients.
+                if (b.LastStreamColors != null && (now - b.LastSentAt).TotalMilliseconds >= 1000.0 / GoveeFps)
+                {
+                    if (_govee.SegmentColors(b.Ip, b.LocalIp, b.LastStreamColors))
+                        b.LastSentAt = now;
+                }
+                return;
+            }
 
             if (b.GoveeRamp < 3 && now >= b.GoveeRampAt)
             {
@@ -857,7 +885,7 @@ namespace Ambilight.Lights
                     bool sent = colors != null && colors.Length > 1
                         ? _govee.SegmentColors(b.Ip, b.LocalIp, colors)       // a true gradient sampled off the screen
                         : _govee.Segments(b.Ip, b.LocalIp, b.ScreenRgb, SegmentsOf(b));
-                    if (sent) { b.LastSentRgb = b.ScreenRgb; b.LastSentAt = now; b.LastStreamRgb = b.ScreenRgb; }
+                    if (sent) { b.LastSentRgb = b.ScreenRgb; b.LastSentAt = now; b.LastStreamRgb = b.ScreenRgb; b.LastStreamColors = colors != null && colors.Length > 1 ? (int[])colors.Clone() : SolidStream(b.ScreenRgb, SegmentsOf(b)); }
                 }
             }
             else if (group == SpreadGroup)
@@ -865,16 +893,23 @@ namespace Ambilight.Lights
                 // The four Chroma groups as a gradient along the device (first segment = Group 1 ... last = Group 4).
                 int[] seg = SpreadColors(SegmentsOf(b));
                 b.CurrentRgb = ZoneRgb(3);
-                if (due && _govee.SegmentColors(b.Ip, b.LocalIp, seg)) { b.LastSentAt = now; b.LastStreamRgb = Average(seg); }
+                if (due && _govee.SegmentColors(b.Ip, b.LocalIp, seg)) { b.LastSentAt = now; b.LastStreamRgb = Average(seg); b.LastStreamColors = (int[])seg.Clone(); }
             }
             else
             {
                 int rgb = ZoneRgb(group - 1);
                 b.CurrentRgb = rgb;
-                if (due && _govee.Segments(b.Ip, b.LocalIp, rgb, SegmentsOf(b))) { b.LastSentRgb = rgb; b.LastSentAt = now; b.LastStreamRgb = rgb; }   // a steady stream, like Govee Desktop
+                if (due && _govee.Segments(b.Ip, b.LocalIp, rgb, SegmentsOf(b))) { b.LastSentRgb = rgb; b.LastSentAt = now; b.LastStreamRgb = rgb; b.LastStreamColors = SolidStream(rgb, SegmentsOf(b)); }   // a steady stream, like Govee Desktop
             }
             if (b.GoveeRampAt == DateTime.MaxValue && b.LastSentAt == now)
                 b.GoveeRampAt = now.AddMilliseconds(1200);
+        }
+
+        static int[] SolidStream(int rgb, int count)
+        {
+            var colors = new int[count];
+            for (int i = 0; i < count; i++) colors[i] = rgb;
+            return colors;
         }
 
         static int Average(int[] colors)

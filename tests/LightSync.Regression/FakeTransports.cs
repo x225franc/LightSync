@@ -46,6 +46,7 @@ namespace Ambilight.Lights
         public static GoveeNet Latest;
         public readonly List<string> Calls = new List<string>();
         public bool FailMode;
+        public int[] LastGradient;
         public GoveeNet(Action<GoveeSeen> onSeen) { Latest = this; }
         public void Refresh() { }
         public void Scan() { }
@@ -53,7 +54,7 @@ namespace Ambilight.Lights
         public bool Brightness(string ip, IPAddress local, int value) { Calls.Add("brightness:" + value); return true; }
         public bool RazerMode(string ip, IPAddress local, bool on) { Calls.Add("mode:" + on); return !FailMode; }
         public bool Segments(string ip, IPAddress local, int rgb, int count) { Calls.Add("frame:" + rgb); return true; }
-        public bool SegmentColors(string ip, IPAddress local, int[] colors) { Calls.Add("gradient"); return true; }
+        public bool SegmentColors(string ip, IPAddress local, int[] colors) { Calls.Add("gradient"); LastGradient = (int[])colors.Clone(); return true; }
         public bool Color(string ip, IPAddress local, int rgb) { Calls.Add("color"); return true; }
         public bool Color(string ip, IPAddress local, int r, int g, int b, int kelvin) => Color(ip, local, 0);
         public GoveeStatus QueryStatus(string ip, IPAddress local, int timeout) => null;
