@@ -111,6 +111,10 @@ namespace Ambilight.Lights
         readonly ManualResetEventSlim _scanNow = new ManualResetEventSlim(false);
         readonly Timer _saveTimer;
         volatile bool _stop;
+        readonly object _powerGate = new object();
+        volatile bool _systemSuspended;
+        bool _powerHeld;
+        DateTime _resumeLightsAt = DateTime.MinValue;
         DateTime _nextRazerTry = DateTime.MinValue;
 
         // Interpolation: the five Chroma zones eased towards their latest value (RGB per zone).
@@ -138,11 +142,114 @@ namespace Ambilight.Lights
             // A bulb's IP can change across a long sleep/hibernate (DHCP lease renewal) - one rescan right after
             // resume lets an already-paired bulb find its new address on its own, without the user having to
             // click "Search again" themselves. Just once per resume, not a recurring poll.
-            SystemEvents.PowerModeChanged += (s, e) => { if (e.Mode == PowerModes.Resume) _scanNow.Set(); };
-            SystemEvents.SessionSwitch += (s, e) => { if (e.Reason == SessionSwitchReason.SessionUnlock) _scanNow.Set(); };
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            SystemEvents.SessionSwitch += OnSessionSwitch;
+            SystemEvents.SessionEnding += OnSessionEnding;
         }
 
-        public void Start() { _loop.Start(); _scanner.Start(); _scanNow.Set(); }
+        public void Start()
+        {
+            if (_config.TurnOnAtStartupOrResume) WakeLights();
+            _loop.Start(); _scanner.Start(); _scanNow.Set();
+        }
+
+        public bool TurnOffOnSuspendOrShutdown
+        {
+            get { return _config.TurnOffOnSuspendOrShutdown; }
+            set { _config.TurnOffOnSuspendOrShutdown = value; _config.Save(); }
+        }
+
+        public bool TurnOnAtStartupOrResume
+        {
+            get { return _config.TurnOnAtStartupOrResume; }
+            set { _config.TurnOnAtStartupOrResume = value; _config.Save(); }
+        }
+
+        private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            if (e.Reason == SessionSwitchReason.SessionUnlock && !_stop) _scanNow.Set();
+        }
+
+        private void OnSessionEnding(object sender, SessionEndingEventArgs e)
+        {
+            // Logoff uses this same notification; leave lights alone on logoff.
+            if (e.Reason == SessionEndReasons.SystemShutdown) SuspendLights();
+        }
+
+        private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (_stop) return;
+            if (e.Mode == PowerModes.Suspend) SuspendLights();
+            else if (e.Mode == PowerModes.Resume) ResumeLights();
+        }
+
+        private void SuspendLights()
+        {
+            lock (_powerGate)
+            {
+                _systemSuspended = true;
+                if (!_config.TurnOffOnSuspendOrShutdown || !_config.ControlEnabled) return;
+                _powerHeld = true;
+                Log.Info("Turning off controlled lights for system suspend/shutdown.");
+                var sends = new List<Task>();
+                foreach (var b in Bulbs)
+                {
+                    if (!b.Config.Controlled || b.Ip == null) continue;
+                    // Prevent normal release/disposal from restoring a visible color.
+                    b.GoveeStreaming = false;
+                    b.GoveeReady = false;
+                    b.GoveeInitStep = 0;
+                    string ip = b.Ip; int port = b.Port; var local = b.LocalIp;
+                    sends.Add(Task.Run(() =>
+                    {
+                        try
+                        {
+                            bool sent = b.Kind == DeviceKind.Govee
+                                ? _govee.Turn(ip, local, false)
+                                : MusicLink.SendPowerOff(ip, port);
+                            if (!sent) Log.Warn("Could not send power off to " + ip + ".");
+                        }
+                        catch (Exception ex) { Log.Warn("Power off failed for " + ip + ": " + ex.Message); }
+                    }));
+                }
+                // Windows allows only a short shutdown/suspend notification window.
+                if (!Task.WaitAll(sends.ToArray(), 1500)) Log.Warn("Some light power-off sends did not finish before the suspend/shutdown deadline.");
+            }
+        }
+
+        private void ResumeLights()
+        {
+            lock (_powerGate)
+            {
+                _systemSuspended = false;
+                if (_config.TurnOnAtStartupOrResume) WakeLights();
+                else if (_powerHeld) Log.Info("Lights remain off after resume; automatic power on is disabled.");
+                _scanNow.Set();
+            }
+        }
+
+        private void WakeLights()
+        {
+            lock (_powerGate)
+            {
+                _powerHeld = false;
+                _resumeLightsAt = DateTime.UtcNow.AddSeconds(3);
+                foreach (var b in Bulbs)
+                {
+                    if (!b.Config.Controlled) continue;
+                    DropLink(b);
+                    b.GoveeStreaming = false;
+                    b.GoveeReady = false;
+                    b.GoveeInitStep = 0;
+                    b.NextAttempt = _resumeLightsAt;
+                    b.LastSentAt = DateTime.MinValue;
+                    b.LastSentRgb = -1;
+                    b.YeelightOff = false;
+                    b.YeelightFading = false;
+                }
+                Log.Info("Automatic light power on requested; waiting for network and capture to recover.");
+            }
+        }
 
         public List<BulbState> Bulbs { get { lock (_bulbs) return new List<BulbState>(_bulbs); } }
 
@@ -153,6 +260,7 @@ namespace Ambilight.Lights
             set
             {
                 if (_config.ControlEnabled == value) return;
+                if (value) { lock (_powerGate) _powerHeld = false; }
                 _config.ControlEnabled = value;
                 Log.Info(value ? "Light control resumed." : "Light control paused.");
                 if (value) _scanNow.Set();
@@ -604,7 +712,7 @@ namespace Ambilight.Lights
         {
             while (!_stop)
             {
-                try { Tick(); }
+                try { lock (_powerGate) Tick(); }
                 catch (Exception e) { Log.Error("Color loop error.", e); }
                 Thread.Sleep(TickMs);
             }
@@ -613,6 +721,7 @@ namespace Ambilight.Lights
         void Tick()
         {
             DateTime now = DateTime.UtcNow;
+            if (_systemSuspended || _powerHeld || now < _resumeLightsAt) return;
             if (!_razer.IsStarted && now >= _nextRazerTry)
             {
                 _razer.TryStart();
@@ -1027,6 +1136,9 @@ namespace Ambilight.Lights
         public void Dispose()
         {
             _stop = true;
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
+            SystemEvents.SessionEnding -= OnSessionEnding;
             _scanNow.Set();
             try { _loop.Join(1000); } catch { }
             _saveTimer.Dispose();

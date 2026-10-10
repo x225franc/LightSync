@@ -206,8 +206,58 @@ internal static class Program
         finally { ScreenState.CapturePaused = false; }
     }
 
+    private static void TestPowerLifecycle()
+    {
+        using (var engine = Create(Kinds.Govee))
+        {
+            var bulb = engine.Bulbs[0];
+            bulb.LastSeenTicks = DateTime.UtcNow.Ticks;
+            bulb.GoveeReady = bulb.GoveeStreaming = true;
+            Assert(!engine.TurnOffOnSuspendOrShutdown && !engine.TurnOnAtStartupOrResume, "New power options must be opt-in");
+            Invoke(engine, "SuspendLights");
+            Invoke(engine, "Tick");
+            Assert(GoveeNet.Latest.Calls.Count == 0, "Disabled power option sent commands during suspend");
+            Invoke(engine, "ResumeLights");
+            engine.TurnOffOnSuspendOrShutdown = true;
+            Invoke(engine, "SuspendLights");
+            Assert(GoveeNet.Latest.Calls.SequenceEqual(new[] { "power:False" }), "Suspend did not turn off Govee");
+            GoveeNet.Latest.Calls.Clear();
+            Invoke(engine, "ResumeLights");
+            Invoke(engine, "Tick");
+            Assert(GoveeNet.Latest.Calls.Count == 0, "Resume woke lights when automatic power on was disabled");
+            engine.TurnOnAtStartupOrResume = true;
+            Invoke(engine, "ResumeLights");
+            Invoke(engine, "Tick");
+            Assert(GoveeNet.Latest.Calls.Count == 0, "Wake raced network/desktop recovery");
+            typeof(Engine).GetField("_resumeLightsAt", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(engine, DateTime.MinValue);
+            Invoke(engine, "Tick");
+            Assert(GoveeNet.Latest.Calls.SequenceEqual(new[] { "brightness:1" }), "Resume did not restart safe Govee initialization");
+            GoveeNet.Latest.Calls.Clear();
+            bulb.Config.Enabled = false;
+            Invoke(engine, "SuspendLights");
+            Assert(GoveeNet.Latest.Calls.Count == 0, "Lifecycle powered off an excluded light");
+        }
+        using (var engine = Create(Kinds.Yeelight))
+        {
+            MusicLink.PowerOffCalls.Clear();
+            var bulb = engine.Bulbs[0];
+            engine.TurnOffOnSuspendOrShutdown = true;
+            Invoke(engine, "OnSessionEnding", null, new Microsoft.Win32.SessionEndingEventArgs(Microsoft.Win32.SessionEndReasons.Logoff));
+            Assert(MusicLink.PowerOffCalls.Count == 0, "Signing out unexpectedly powered off the lights");
+            Invoke(engine, "OnSessionEnding", null, new Microsoft.Win32.SessionEndingEventArgs(Microsoft.Win32.SessionEndReasons.SystemShutdown));
+            Assert(MusicLink.PowerOffCalls.SequenceEqual(new[] { "127.0.0.1" }), "Yeelight without a music connection was not switched off");
+            engine.TurnOnAtStartupOrResume = true;
+            Invoke(engine, "ResumeLights");
+            Invoke(engine, "ConnectYeelight", bulb);
+            ScreenState.CapturePaused = false;
+            Invoke(engine, "TickYeelight", bulb, 1, DateTime.UtcNow);
+            Assert(bulb.Link.Calls.SequenceEqual(new[] { "scene:65280:40" }), "Wake did not restore Yeelight color/brightness atomically");
+        }
+    }
+
     public static void Main()
     {
+        TestPowerLifecycle();
         TestFrozenLights();
         TestKeyboardResume();
         TestDiscoveryLoss();
@@ -215,6 +265,6 @@ internal static class Program
         TestGoveeWaitForColor();
         TestYeelightReconnect();
         TestChromaWrites();
-        Console.WriteLine("PASS: keyboard resume recovery, discovery loss/recovery, Govee startup pacing/failure, Yeelight reconnect/pause, Chroma serialization/errors.");
+        Console.WriteLine("PASS: power lifecycle, frozen light keepalive, keyboard resume recovery, discovery loss/recovery, Govee startup pacing/failure, Yeelight reconnect/pause, Chroma serialization/errors.");
     }
 }

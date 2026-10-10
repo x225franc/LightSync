@@ -176,6 +176,14 @@
                 <!-- Settings -->
                 <StackPanel x:Name="_settingsPanel" Visibility="Collapsed">
                     <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Lights" />
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Power24">
+                        <wpfui:CardControl.Header><TextBlock Text="Turn lights off on sleep, hibernate or shutdown" TextWrapping="Wrap" /></wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_powerOffToggle" Click="LightPowerToggle_Click" />
+                    </wpfui:CardControl>
+                    <wpfui:CardControl Margin="0,0,0,8" Icon="Power24">
+                        <wpfui:CardControl.Header><TextBlock Text="Turn lights on at startup or resume" TextWrapping="Wrap" /></wpfui:CardControl.Header>
+                        <wpfui:ToggleSwitch x:Name="_powerOnToggle" Click="LightPowerToggle_Click" />
+                    </wpfui:CardControl>
                     <wpfui:CardControl Margin="0,0,0,8" Icon="ArrowSync24">
                         <wpfui:CardControl.Header>
                             <StackPanel>

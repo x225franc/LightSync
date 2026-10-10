@@ -177,6 +177,25 @@ namespace Ambilight.Lights
             return Send("set_scene", "\"color\"," + Math.Max(1, rgb) + "," + Math.Max(1, Math.Min(100, percent)));
         }
         public bool SetBrightness(int percent) { return Send("set_bright", Math.Max(1, Math.Min(100, percent)) + ",\"sudden\",0"); }
+        // A shutdown must not wait for music-mode negotiation. Send one bounded
+        // LAN command even if this bulb currently has no working music session.
+        public static bool SendPowerOff(string ip, int port)
+        {
+            using (var client = new TcpClient())
+            {
+                var connect = client.ConnectAsync(ip, port);
+                if (!connect.Wait(500))
+                {
+                    connect.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                    return false;
+                }
+                client.SendTimeout = 500;
+                byte[] command = Encoding.UTF8.GetBytes("{\"id\":1,\"method\":\"set_power\",\"params\":[\"off\",\"sudden\",0]}\r\n");
+                client.GetStream().Write(command, 0, command.Length);
+                return true;
+            }
+        }
+
         public bool SetPower(bool on) { return Send("set_power", "\"" + (on ? "on" : "off") + "\",\"sudden\",0"); }
 
         /// <summary>Switches off with the bulb's own fade, which can go below the 1% brightness floor the color commands have.</summary>

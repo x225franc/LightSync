@@ -128,6 +128,8 @@ namespace Ambilight.Lights
         }
         /// <summary>Master switch: when off, no device is controlled (they keep their last color).</summary>
         public bool ControlEnabled { get; set; } = true;
+        public bool TurnOffOnSuspendOrShutdown { get; set; }
+        public bool TurnOnAtStartupOrResume { get; set; }
         /// <summary>Maximum color updates per second sent to each Govee device (Chroma itself only produces ~20/s).</summary>
         public int GoveeFps { get; set; } = 25;
         /// <summary>Maximum color updates per second sent to each Yeelight bulb (music mode has no limit of its own).</summary>

@@ -54,6 +54,13 @@ namespace Ambilight.GUI
                 pages[i].Visibility = i == NavList.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        private void LightPowerToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading || _engine == null) return;
+            _engine.TurnOffOnSuspendOrShutdown = PowerOffToggle.IsChecked ?? false;
+            _engine.TurnOnAtStartupOrResume = PowerOnToggle.IsChecked ?? false;
+        }
+
         private void LoadLightsValues()
         {
             if (_engine == null)
@@ -61,6 +68,8 @@ namespace Ambilight.GUI
 
             _isLoading = true;
             ControlToggle.IsChecked = _engine.Enabled;
+            PowerOffToggle.IsChecked = _engine.TurnOffOnSuspendOrShutdown;
+            PowerOnToggle.IsChecked = _engine.TurnOnAtStartupOrResume;
             InterpolateToggle.IsChecked = _engine.Interpolate;
             ForceLocalZoneToggle.IsChecked = _engine.ForceLocalZoneControl;
             YeelightFadeSlider.Value = _engine.YeelightFadeMs;

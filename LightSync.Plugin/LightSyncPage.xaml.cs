@@ -55,6 +55,8 @@ public partial class LightSyncPage : UiPage
         _tickrateSlider.Value = _settings.Tickrate;
         _saturationSlider.Value = _settings.Saturation * 100.0;
         _deviceBrightnessSlider.Value = _settings.DeviceBrightness;
+        _powerOffToggle.IsChecked = LightsService.Engine?.TurnOffOnSuspendOrShutdown ?? false;
+        _powerOnToggle.IsChecked = LightsService.Engine?.TurnOnAtStartupOrResume ?? false;
         _interpolateToggle.IsChecked = LightsService.Engine?.Interpolate ?? false;
         LoadMonitorCombo();
 
@@ -195,6 +197,15 @@ public partial class LightSyncPage : UiPage
         if (_isUpdatingUi) return;
         _settings.DeviceBrightness = (int)e.NewValue;
         EngineHost.SaveSettings();
+    }
+
+    private void LightPowerToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_constructed || _isUpdatingUi) return;
+        var engine = LightsService.Engine;
+        if (engine == null) return;
+        engine.TurnOffOnSuspendOrShutdown = _powerOffToggle.IsChecked ?? false;
+        engine.TurnOnAtStartupOrResume = _powerOnToggle.IsChecked ?? false;
     }
 
     private void InterpolateToggle_Click(object sender, RoutedEventArgs e)

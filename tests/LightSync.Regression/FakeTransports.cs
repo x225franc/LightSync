@@ -18,6 +18,7 @@ namespace Ambilight.Lights
     {
         public List<BulbConfig> Bulbs = new List<BulbConfig>();
         public bool ControlEnabled = true, Interpolate, ForceLocalZoneControl;
+        public bool TurnOffOnSuspendOrShutdown, TurnOnAtStartupOrResume;
         public int YeelightOffBelow = 2, YeelightFadeMs = 115, YeelightFps = 2, GoveeFps = 25;
         public void Save() { }
     }
@@ -66,6 +67,8 @@ namespace Ambilight.Lights
         public bool IsAlive = true;
         public string CloseReason, LastReply;
         public MusicLink(string ip, int port, IPAddress local) { }
+        public static readonly List<string> PowerOffCalls = new List<string>();
+        public static bool SendPowerOff(string ip, int port) { PowerOffCalls.Add(ip); return true; }
         public bool Open() => true;
         public bool SetPower(bool on) { Calls.Add("power:" + on); return true; }
         public bool SetBrightness(int brightness) { Calls.Add("brightness:" + brightness); return true; }
