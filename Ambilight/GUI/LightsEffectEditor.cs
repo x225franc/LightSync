@@ -13,7 +13,8 @@ namespace Ambilight.GUI
 
         public LightsEffectEditor(Engine engine, Config config)
         {
-            Header = "Global effect";
+            SetResourceReference(ForegroundProperty, "TextFillColorPrimaryBrush");
+            Header = ThemedText(new TextBlock { Text = "Global effect" });
             var panel = new StackPanel { Margin = new Thickness(12) };
             var effect = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Left,
                 ItemsSource = LightEffects.Names, SelectedIndex = Enum.IsDefined(typeof(LightEffect), config.AllLightsEffect) ? (int)config.AllLightsEffect : 0 };
@@ -30,7 +31,7 @@ namespace Ambilight.GUI
             var speed = new Slider { Minimum = 0, Maximum = 100, TickFrequency = 1, IsSnapToTickEnabled = true, Value = Math.Max(0, Math.Min(100, config.AllLightsSpeed)) };
             var reverse = new Wpf.Ui.Controls.ToggleSwitch { IsChecked = config.AllLightsReverse, HorizontalAlignment = HorizontalAlignment.Left };
             var brightness = new Slider { Minimum = 1, Maximum = 100, TickFrequency = 1, IsSnapToTickEnabled = true, Value = Math.Max(1, Math.Min(100, config.AllLightsBrightness)) };
-            var brightnessText = new TextBlock { Width = 45, VerticalAlignment = VerticalAlignment.Center };
+            var brightnessText = ThemedText(new TextBlock { Width = 45, VerticalAlignment = VerticalAlignment.Center });
             brightnessText.Text = ((int)brightness.Value) + "%";
             brightness.ValueChanged += (s, e) => brightnessText.Text = ((int)e.NewValue) + "%";
             var brightnessPanel = new DockPanel();
@@ -54,7 +55,7 @@ namespace Ambilight.GUI
             }
             effect.SelectionChanged += (s, e) => UpdateRows();
             UpdateRows();
-            panel.Children.Add(new TextBlock { Text = "Apply the same settings and restart animations together. Disabled lights stay disabled; individual settings can be changed afterwards.", TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Margin = new Thickness(0, 4, 0, 8) });
+            panel.Children.Add(ThemedText(new TextBlock { Text = "Apply the same settings and restart animations together. Disabled lights stay disabled; individual settings can be changed afterwards.", TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Margin = new Thickness(0, 4, 0, 8) }));
             var apply = new Wpf.Ui.Controls.Button { Content = "Apply to all lights", HorizontalAlignment = HorizontalAlignment.Left };
             apply.Click += (s, e) =>
             {
@@ -67,12 +68,18 @@ namespace Ambilight.GUI
             Content = panel;
         }
 
+        private static TextBlock ThemedText(TextBlock text)
+        {
+            text.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+            return text;
+        }
+
         private static Grid Row(string label, UIElement control)
         {
             var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(ThemedText(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center }));
             Grid.SetColumn(control, 1);
             row.Children.Add(control);
             return row;
