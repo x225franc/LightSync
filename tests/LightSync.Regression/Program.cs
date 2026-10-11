@@ -353,7 +353,11 @@ internal static class Program
             Assert(GoveeNet.Latest.Frames["127.0.0.1"].SequenceEqual(GoveeNet.Latest.Frames["127.0.0.2"]), "Slow network sends caused per-light phase drift within a frame");
             engine.SetEffect(engine.Bulbs[0], LightEffect.SolidColor, 0x00FF00, 0, false);
             Assert(engine.Bulbs[1].Config.Effect == LightEffect.ColorCycle, "Individual edit changed another light");
+            engine.Bulbs[0].LastStreamColors = new[] { 0x00FF00, 0xFF0000 };
+            engine.Bulbs[2].YeelightFading = engine.Bulbs[2].YeelightOff = true;
             engine.SetAllEffects(LightEffect.ScreenAmbilight, 0, 200, false, 0);
+            Assert(engine.Bulbs.All(b => b.Config.Effect == LightEffect.ScreenAmbilight), "Global apply preserved an individual effect override");
+            Assert(engine.Bulbs.All(b => b.LastSentRgb == -1 && b.LastStreamColors == null && !b.YeelightFading && !b.YeelightOff), "Global apply retained a previous send/fade state");
             Assert(config.AllLightsSpeed == 100 && config.AllLightsBrightness == 1, "Global controls were not clamped");
             Assert(engine.Bulbs[1].Config.UseScreenPosition && engine.Bulbs[1].Config.Group == 3, "Return to screen lost mappings");
         }

@@ -64,7 +64,7 @@ public partial class LightSyncPage : UiPage
         if (LightsService.Engine is { } globalEngine && LightsService.Config is { } globalConfig)
         {
             var editor = new LightsEffectEditor(globalEngine, globalConfig);
-            editor.Applied += (_, _) => RefreshBulbList(force: true);
+            editor.Applied += (_, _) => RefreshBulbList(force: false);
             _globalLightsEffectHost.Children.Add(editor);
         }
         var engineForLights = LightsService.Engine;
@@ -645,6 +645,7 @@ public partial class LightSyncPage : UiPage
         public required ToggleSwitch CanvasToggle;
         public required ComboBox EffectCombo;
         public required Slider EffectSpeed;
+        public required Slider Brightness;
         public required ToggleSwitch EffectReverse;
         public required Action UpdateEffectControls;
     }
@@ -659,38 +660,45 @@ public partial class LightSyncPage : UiPage
 
         if (force || !ids.SetEquals(_bulbRows.Keys))
         {
-            _bulbRows.Clear();
-
-            var rows = new StackPanel();
-            foreach (var group in bulbs.GroupBy(b => b.Kind).OrderBy(g => g.Key))
+            var wasUpdatingDuringBuild = _isUpdatingUi;
+            _isUpdatingUi = true;
+            try
             {
-                rows.Children.Add(new TextBlock
+                _bulbRows.Clear();
+
+                var rows = new StackPanel();
+                foreach (var group in bulbs.GroupBy(b => b.Kind).OrderBy(g => g.Key))
                 {
-                    Margin = new Thickness(0, 8, 0, 8),
-                    FontSize = 13,
-                    FontWeight = FontWeights.SemiBold,
-                    Text = $"{group.Key} ({group.Count()})",
-                });
-                foreach (var bulb in group)
-                {
-                    var (card, row) = BuildBulbRow(engine!, bulb);
-                    _bulbRows[bulb.Config.Id] = row;
-                    rows.Children.Add(card);
+                    rows.Children.Add(new TextBlock
+                    {
+                        Margin = new Thickness(0, 8, 0, 8),
+                        FontSize = 13,
+                        FontWeight = FontWeights.SemiBold,
+                        Text = $"{group.Key} ({group.Count()})",
+                    });
+                    foreach (var bulb in group)
+                    {
+                        var (card, row) = BuildBulbRow(engine!, bulb);
+                        _bulbRows[bulb.Config.Id] = row;
+                        rows.Children.Add(card);
+                    }
                 }
-            }
 
-            if (bulbs.Count == 0)
-            {
-                rows.Children.Add(new TextBlock
+                if (bulbs.Count == 0)
                 {
-                    Text = "No Yeelight/Govee device found yet.",
-                    Foreground = (WpfBrush)FindResource("TextFillColorSecondaryBrush"),
-                    Margin = new Thickness(0, 8, 0, 0),
-                });
-            }
+                    rows.Children.Add(new TextBlock
+                    {
+                        Text = "No Yeelight/Govee device found yet.",
+                        Foreground = (WpfBrush)FindResource("TextFillColorSecondaryBrush"),
+                        Margin = new Thickness(0, 8, 0, 0),
+                    });
+                }
 
-            _bulbList.Items.Clear();
-            _bulbList.Items.Add(rows);
+                _bulbList.Items.Clear();
+                _bulbList.Items.Add(rows);
+            }
+            finally { _isUpdatingUi = wasUpdatingDuringBuild; }
+
             return;
         }
 
@@ -718,6 +726,7 @@ public partial class LightSyncPage : UiPage
                 if (row.CanvasToggle.IsChecked != bulb.Config.UseScreenPosition) row.CanvasToggle.IsChecked = bulb.Config.UseScreenPosition;
                 row.EffectCombo.SelectedIndex = (int)bulb.Config.Effect;
                 row.EffectSpeed.Value = bulb.Config.EffectSpeed;
+                row.Brightness.Value = bulb.Config.Brightness;
                 row.EffectReverse.IsChecked = bulb.Config.EffectReverse;
                 row.UpdateEffectControls();
             }
@@ -943,6 +952,7 @@ public partial class LightSyncPage : UiPage
             CanvasToggle = canvasToggle,
             EffectCombo = effectCombo,
             EffectSpeed = effectSpeed,
+            Brightness = brightnessSlider,
             EffectReverse = effectReverse,
             UpdateEffectControls = UpdateEffectControls,
         };
