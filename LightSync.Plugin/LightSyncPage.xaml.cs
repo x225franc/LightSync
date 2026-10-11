@@ -337,6 +337,7 @@ public partial class LightSyncPage : UiPage
         var config = LightsService.Config;
         if (config is null) return;
         config.OpenRgbEnabled = _openRgbEnabledToggle.IsChecked ?? false;
+        EngineHost.LogicManagerInstance?.RefreshOpenRgbDevices();
         config.Save();
         RefreshOpenRgbList(force: true);
     }

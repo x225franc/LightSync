@@ -33,6 +33,7 @@ namespace Ambilight.Lights
 
         Thread _thread;
         volatile bool _stop;
+        int _refreshRequested;
         OpenRGBClient _client;
         DateTime _nextConnectAttempt = DateTime.MinValue;
 
@@ -57,6 +58,14 @@ namespace Ambilight.Lights
             _thread.Start();
         }
 
+        public void RequestRefresh()
+        {
+            // UI callbacks never touch the socket or the streaming dictionaries.
+            Interlocked.Exchange(ref _refreshRequested, 1);
+            Connected = false;
+            DiscoveredDevices = new List<OpenRgbDeviceInfo>();
+        }
+
         public void Stop()
         {
             _stop = true;
@@ -77,6 +86,12 @@ namespace Ambilight.Lights
 
         void Tick()
         {
+            if (Interlocked.Exchange(ref _refreshRequested, 0) != 0)
+            {
+                DisconnectClient();
+                _nextConnectAttempt = DateTime.MinValue;
+                LastError = null;
+            }
             var config = Cfg;
             if (config == null || !config.OpenRgbEnabled)
             {
@@ -119,9 +134,10 @@ namespace Ambilight.Lights
 
         void TryConnect(Config config)
         {
+            OpenRGBClient client = null;
             try
             {
-                var client = new OpenRGBClient(config.OpenRgbHost, config.OpenRgbPort, "LightSync", false, 1000);
+                client = new OpenRGBClient(config.OpenRgbHost, config.OpenRgbPort, "LightSync", false, 1000);
                 client.Connect();
 
                 var found = client.GetAllControllerData();
@@ -139,6 +155,8 @@ namespace Ambilight.Lights
 
                 DiscoveredDevices = discovered;
                 _client = client;
+                client = null;
+                _nextConnectAttempt = DateTime.MinValue;
                 Connected = true;
                 LastError = null;
                 Log.Info("OpenRGB: connected, " + discovered.Count + " device(s) with LEDs found.");
@@ -149,6 +167,7 @@ namespace Ambilight.Lights
                 Connected = false;
                 _nextConnectAttempt = DateTime.UtcNow.AddSeconds(10);
             }
+            finally { if (client != null) { try { client.Dispose(); } catch { } } }
         }
 
         void DisconnectClient()

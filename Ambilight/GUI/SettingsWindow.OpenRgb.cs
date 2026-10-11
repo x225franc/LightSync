@@ -73,6 +73,7 @@ namespace Ambilight.GUI
         {
             if (_isLoading || OpenRgbCfg == null) return;
             OpenRgbCfg.OpenRgbEnabled = OpenRgbEnabledToggle.IsChecked == true;
+            Program.LogicManager?.RefreshOpenRgbDevices();
             OpenRgbCfg.Save();
             RefreshOpenRgb();
         }

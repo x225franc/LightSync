@@ -175,6 +175,8 @@ namespace Ambilight.Logic
         /// was plugged in or woken up after Chroma had already started and so missed the automatic one.</summary>
         public void KickChromaLink() { _linkLogic?.Kick(); }
 
+        public void RefreshOpenRgbDevices() { _openRgb?.RequestRefresh(); }
+
         public bool OpenRgbConnected { get { return _openRgb != null && _openRgb.Connected; } }
         public string OpenRgbLastError { get { return _openRgb?.LastError; } }
         public System.Collections.Generic.List<Ambilight.Lights.OpenRgbDeviceInfo> OpenRgbDiscoveredDevices
