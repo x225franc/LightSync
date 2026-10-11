@@ -441,6 +441,10 @@ namespace Ambilight.Lights
                 _config.AllLightsBrightness = Math.Max(1, Math.Min(100, brightness));
                 foreach (var bulb in Bulbs)
                 {
+                    // A global screen preset must also control enabled lights without a mapping.
+                    if (_config.AllLightsEffect == LightEffect.ScreenAmbilight && bulb.Config.Enabled &&
+                        bulb.Config.Group <= 0 && !bulb.Config.UseScreenPosition)
+                        bulb.Config.Group = 1;
                     bulb.Config.Effect = _config.AllLightsEffect;
                     bulb.Config.EffectColor = _config.AllLightsColor;
                     bulb.Config.EffectSpeed = _config.AllLightsSpeed;

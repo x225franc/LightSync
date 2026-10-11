@@ -332,11 +332,13 @@ internal static class Program
     private static void TestAllLightsEffect()
     {
         var config = new Config();
-        config.Bulbs.Add(new BulbConfig { Id = "one", Kind = Kinds.Govee, Group = 1 });
+        config.Bulbs.Add(new BulbConfig { Id = "one", Kind = Kinds.Govee, Group = 0 });
         config.Bulbs.Add(new BulbConfig { Id = "two", Kind = Kinds.Govee, Group = 3, UseScreenPosition = true });
         config.Bulbs.Add(new BulbConfig { Id = "off", Kind = Kinds.Yeelight, Enabled = false });
         using (var engine = new Engine(config))
         {
+            engine.Bulbs[0].Config.Group = 0;
+            engine.Bulbs[2].Config.Group = 0;
             engine.SetAllEffects(LightEffect.ColorCycle, 0x123456, 100, true, 42);
             Assert(config.AllLightsEffect == LightEffect.ColorCycle && config.AllLightsBrightness == 42, "Global preset was not retained for saving");
             Assert(engine.Bulbs.All(b => b.Config.Effect == LightEffect.ColorCycle && b.Config.EffectColor == 0x123456 && b.Config.EffectSpeed == 100 && b.Config.EffectReverse && b.Config.Brightness == 42), "Global preset skipped lights or parameters");
@@ -358,6 +360,13 @@ internal static class Program
             engine.SetAllEffects(LightEffect.ScreenAmbilight, 0, 200, false, 0);
             Assert(engine.Bulbs.All(b => b.Config.Effect == LightEffect.ScreenAmbilight), "Global apply preserved an individual effect override");
             Assert(engine.Bulbs.All(b => b.LastSentRgb == -1 && b.LastStreamColors == null && !b.YeelightFading && !b.YeelightOff), "Global apply retained a previous send/fade state");
+            Assert(engine.Bulbs[0].Config.Controlled && engine.Bulbs[0].Config.Group == 1, "Global screen preset abandoned an unmapped light");
+            Assert(engine.Bulbs[2].Config.Group == 0 && !engine.Bulbs[2].Config.Controlled, "Global screen preset enabled a disabled light");
+            engine.ForceLocalZoneControl = true;
+            engine.SetLocalZoneRgb(0x008000, 0xFF0000, 0x0000FF, 0xFFFF00);
+            GoveeNet.Latest.Calls.Clear();
+            Invoke(engine, "TickGovee", engine.Bulbs[0], engine.Bulbs[0].Config.Group, DateTime.UtcNow.AddSeconds(1));
+            Assert(GoveeNet.Latest.Calls.Contains("frame:32768"), "Unmapped light retained its previous effect after global screen apply");
             Assert(config.AllLightsSpeed == 100 && config.AllLightsBrightness == 1, "Global controls were not clamped");
             Assert(engine.Bulbs[1].Config.UseScreenPosition && engine.Bulbs[1].Config.Group == 3, "Return to screen lost mappings");
         }
