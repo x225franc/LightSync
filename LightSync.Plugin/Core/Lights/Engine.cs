@@ -448,6 +448,10 @@ namespace Ambilight.Lights
                     bulb.Config.Brightness = _config.AllLightsBrightness;
                     bulb.BrightnessDirty = true;
                     ApplyControlledChange(bulb);
+                    // Force every light to take the preset, whatever effect or stream state it was in.
+                    bulb.LastStreamColors = null;
+                    bulb.YeelightFading = false;
+                    bulb.YeelightOff = false;
                 }
                 _effectClock.Restart();
                 _effectFrameSeconds = 0;

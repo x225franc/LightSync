@@ -885,7 +885,10 @@ public partial class LightSyncPage : UiPage
             canvasRow.IsEnabled = bulb.Config.Enabled && effect == LightEffect.ScreenAmbilight;
             effectCombo.IsEnabled = colorRow.IsEnabled = speedRow.IsEnabled = reverseRow.IsEnabled = bulb.Config.Enabled;
             effectSwatch.Background = new WpfSolidColorBrush(RgbToWpfColor(bulb.Config.EffectColor));
-            colorWheel.SelectedColor = System.Drawing.Color.FromArgb((bulb.Config.EffectColor >> 16) & 255, (bulb.Config.EffectColor >> 8) & 255, bulb.Config.EffectColor & 255);
+            var wasUpdating = _isUpdatingUi;
+            _isUpdatingUi = true;
+            try { colorWheel.SelectedColor = System.Drawing.Color.FromArgb((bulb.Config.EffectColor >> 16) & 255, (bulb.Config.EffectColor >> 8) & 255, bulb.Config.EffectColor & 255); }
+            finally { _isUpdatingUi = wasUpdating; }
         }
         void SaveEffect()
         {
@@ -900,6 +903,7 @@ public partial class LightSyncPage : UiPage
         {
             if (_isUpdatingUi) return;
             var c = colorWheel.SelectedColor;
+            if (((c.R << 16) | (c.G << 8) | c.B) == bulb.Config.EffectColor) return;
             engine.SetEffect(bulb, bulb.Config.Effect, (c.R << 16) | (c.G << 8) | c.B, bulb.Config.EffectSpeed, bulb.Config.EffectReverse);
             UpdateEffectControls();
         };
