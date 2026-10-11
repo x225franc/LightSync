@@ -30,6 +30,7 @@ namespace Ambilight.Lights
 
         public DeviceKind Kind { get { return Config.Kind == Kinds.Govee ? DeviceKind.Govee : DeviceKind.Yeelight; } }
 
+        internal Task YeelightRelease = Task.FromResult(0);
         internal MusicLink Link;              // Yeelight only: the music-mode session
         internal bool Connecting;
         internal DateTime NextAttempt = DateTime.MinValue;
@@ -110,6 +111,7 @@ namespace Ambilight.Lights
         readonly ManualResetEventSlim _scanNow = new ManualResetEventSlim(false);
         readonly Timer _saveTimer;
         volatile bool _stop;
+        readonly List<Task> _pendingYeelight = new List<Task>();
         readonly object _powerGate = new object();
         volatile bool _systemSuspended;
         bool _powerHeld;
@@ -187,6 +189,10 @@ namespace Ambilight.Lights
             lock (_powerGate)
             {
                 _systemSuspended = true;
+                var releases = new List<Task>();
+                foreach (var b in Bulbs) releases.Add(DropLink(b));
+                lock (_pendingYeelight) releases.AddRange(_pendingYeelight);
+                if (!Task.WaitAll(releases.ToArray(), 2000)) Log.Warn("Yeelight session release deadline reached during suspend/shutdown.");
                 if (!_config.TurnOffOnSuspendOrShutdown || !_config.ControlEnabled) return;
                 _powerHeld = true;
                 Log.Info("Turning off controlled lights for system suspend/shutdown.");
@@ -783,11 +789,12 @@ namespace Ambilight.Lights
                     // connect/disconnect storm instead of letting it recover.
                     b.NextAttempt = DateTime.UtcNow.AddSeconds(lived < 10 ? 3 : 0);
                 }
+                if (!b.YeelightRelease.IsCompleted) return;
                 if (!b.Connecting && now >= b.NextAttempt)
                 {
                     b.Connecting = true;
                     b.Status = BulbStatus.Connecting;
-                    Task.Run(() => ConnectYeelight(b));
+                    TrackYeelight(Task.Run(() => ConnectYeelight(b)));
                 }
                 return;
             }
@@ -1067,22 +1074,28 @@ namespace Ambilight.Lights
             try
             {
                 link = new MusicLink(b.Ip, b.Port, b.LocalIp);
-                if (link.Open())
+                if (link.Open(() => _stop || _systemSuspended || _powerHeld))
                 {
-                    // Do not wake the bulb in its old color. TickYeelight's first set_scene
-                    // applies the actual color and brightness together and switches it on.
-                    // If capture is paused or no color is ready, leave its state untouched.
-                    b.LastSentRgb = -1;
-                    b.LastSentAt = DateTime.MinValue;
-                    b.Failures = 0;
-                    b.Error = null;
-                    b.Link = link;
-                    b.LinkSince = DateTime.UtcNow;
-                    b.Status = BulbStatus.Connected;
-                    Log.Info("Connected to " + b.Ip + " (zone " + b.Config.Group + ")");
-                    link = null;
-                    return;
+                    if (_stop || _systemSuspended || _powerHeld) return;
+                    lock (_powerGate)
+                    {
+                        if (_stop || _systemSuspended || _powerHeld) return;
+                        // Do not wake the bulb in its old color. TickYeelight's first set_scene
+                        // applies the actual color and brightness together and switches it on.
+                        // If capture is paused or no color is ready, leave its state untouched.
+                        b.LastSentRgb = -1;
+                        b.LastSentAt = DateTime.MinValue;
+                        b.Failures = 0;
+                        b.Error = null;
+                        b.Link = link;
+                        b.LinkSince = DateTime.UtcNow;
+                        b.Status = BulbStatus.Connected;
+                        Log.Info("Connected to " + b.Ip + " (zone " + b.Config.Group + ")");
+                        link = null;
+                        return;
+                    }
                 }
+                if (_stop || _systemSuspended || _powerHeld) return;
 
                 b.Error = string.IsNullOrEmpty(link.LastReply) ? "no answer"
                         : link.LastReply.Contains("\"ok\"") ? "the bulb could not connect back - check the Windows Firewall"
@@ -1121,19 +1134,27 @@ namespace Ambilight.Lights
             }
         }
 
-        /// <summary>Hands the bulb back properly when control is actually being released (not just a transient
-        /// reconnect - this is only called from the disabled/uncontrolled branch of Tick()): restores whatever it
-        /// was showing before we first took it over, through the still-open link, then clears the snapshot so the
-        /// next time control is taken it captures fresh again.</summary>
-        void DropLink(BulbState b)
+        Task TrackYeelight(Task task)
+        {
+            lock (_pendingYeelight)
+            {
+                _pendingYeelight.RemoveAll(t => t.IsCompleted);
+                _pendingYeelight.Add(task);
+            }
+            return task;
+        }
+
+        Task DropLink(BulbState b)
         {
             var link = b.Link;
             b.Link = null;
-            if (link != null) Task.Run(() => { try { link.Dispose(); } catch { } });    // its cleanup waits a little: not on the color loop
+            var release = link == null ? b.YeelightRelease : TrackYeelight(Task.Run(() => { try { link.Dispose(); } catch (Exception ex) { Log.Warn("Yeelight release failed: " + ex.Message); } }));    // its cleanup waits a little: not on the color loop
+            b.YeelightRelease = release;
             if (b.Config.Controlled && b.Status == BulbStatus.Connected) b.Status = BulbStatus.Connecting;
             b.LastSentRgb = -1;
             b.YeelightOff = false;
             b.YeelightFading = false;
+            return release;
         }
 
         public void Dispose()
@@ -1147,7 +1168,9 @@ namespace Ambilight.Lights
             _saveTimer.Dispose();
             _config.Save();
             var releasing = new List<Task>();
-            foreach (var b in Bulbs) { DropLink(b); releasing.Add(ReleaseGovee(b)); }
+            lock (_powerGate)
+                foreach (var b in Bulbs) { releasing.Add(DropLink(b)); releasing.Add(ReleaseGovee(b)); }
+            lock (_pendingYeelight) releasing.AddRange(_pendingYeelight);
             try { Task.WaitAll(releasing.ToArray(), 3000); } catch { }
             _govee.Dispose();
             _razer.Dispose();

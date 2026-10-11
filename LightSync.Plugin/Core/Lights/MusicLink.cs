@@ -21,6 +21,10 @@ namespace Ambilight.Lights
         TcpListener _listener;
         int _listenPort, _messageId = 1;
 
+        int _disposed;
+        Func<bool> _cancelled;
+        bool Cancelled { get { return Volatile.Read(ref _disposed) != 0 || (_cancelled != null && _cancelled()); } }
+
         public string LastReply { get; private set; }
 
         public MusicLink(string ip, int port, IPAddress localIp)
@@ -32,14 +36,15 @@ namespace Ambilight.Lights
         /// Opens the session. A bulb can still hold a previous session (for example the official connector's),
         /// so any old one is cleared first and the whole thing is retried a few times.
         /// </summary>
-        public bool Open()
+        public bool Open(Func<bool> cancelled = null)
         {
-            for (int attempt = 1; attempt <= 3; attempt++)
+            _cancelled = cancelled;
+            for (int attempt = 1; attempt <= 3 && !Cancelled; attempt++)
             {
                 try { if (TryOpen()) return true; }
                 catch (Exception e) { LastReply = e.Message; }
                 CloseSockets();
-                Thread.Sleep(1200);
+                for (int i = 0; i < 24 && !Cancelled; i++) Thread.Sleep(50);
             }
             return false;
         }
@@ -56,7 +61,9 @@ namespace Ambilight.Lights
             var connectTask = _control.ConnectAsync(_ip, _controlPort);
             try
             {
-                if (!connectTask.Wait(3000))
+                var deadline = DateTime.UtcNow.AddSeconds(3);
+                while (!connectTask.Wait(50) && DateTime.UtcNow < deadline && !Cancelled) { }
+                if (!connectTask.IsCompleted || Cancelled)
                 {
                     connectTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
                     throw new TimeoutException("bulb did not accept the TCP connection");
@@ -73,13 +80,13 @@ namespace Ambilight.Lights
             _listener.Start();
             _listenPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
 
-            SendOn(_control, "set_music", "0,\"" + _localIp + "\"," + _listenPort);
+            SendOn(_control, "set_music", "0");
             Thread.Sleep(400);
             Drain();
             SendOn(_control, "set_music", "1,\"" + _localIp + "\"," + _listenPort);
 
             DateTime end = DateTime.UtcNow.AddSeconds(4);
-            while (DateTime.UtcNow < end)
+            while (DateTime.UtcNow < end && !Cancelled)
             {
                 Drain();
                 if (_listener.Pending())
@@ -218,12 +225,51 @@ namespace Ambilight.Lights
             _music = null; _control = null; _listener = null;
         }
 
+        internal static bool StopMusicMode(string ip, int port)
+        {
+            // A fresh connection also works when the old control socket is stale.
+            using (var client = new TcpClient())
+            {
+                var connect = client.ConnectAsync(ip, port);
+                if (!connect.Wait(500))
+                {
+                    connect.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                    return false;
+                }
+                client.SendTimeout = 500;
+                client.ReceiveTimeout = 600;
+                byte[] command = Encoding.UTF8.GetBytes("{\"id\":1,\"method\":\"set_music\",\"params\":[0]}\r\n");
+                var stream = client.GetStream();
+                stream.Write(command, 0, command.Length);
+                using (var reader = new System.IO.StreamReader(stream, Encoding.UTF8))
+                {
+                    var deadline = DateTime.UtcNow.AddMilliseconds(600);
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        client.ReceiveTimeout = Math.Max(1, (int)(deadline - DateTime.UtcNow).TotalMilliseconds);
+                        string line = reader.ReadLine();
+                        if (line == null) return false;
+                        var reply = Newtonsoft.Json.Linq.JObject.Parse(line);
+                        if ((int?)reply["id"] != 1) continue;
+                        return reply["error"] == null && (string)reply["result"]?[0] == "ok";
+                    }
+                }
+                return false;
+            }
+        }
+
         public void Dispose()
         {
-            // Leave music mode explicitly so the bulb is immediately available to the next client.
-            try { if (_control != null && _control.Connected) SendOn(_control, "set_music", "0,\"" + _localIp + "\"," + _listenPort); } catch { }
-            Thread.Sleep(100);
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            // Closing the callback socket releases music mode too. Do it first,
+            // so it cannot keep receiving frames while the explicit stop is checked.
             CloseSockets();
+            try
+            {
+                if (StopMusicMode(_ip, _controlPort)) Log.Info("Yeelight music mode release acknowledged by " + _ip + ".");
+                else Log.Warn("Yeelight music mode release was not acknowledged by " + _ip + ".");
+            }
+            catch (Exception e) { Log.Warn("Yeelight music mode release failed for " + _ip + ": " + e.Message); }
         }
     }
 }

@@ -255,8 +255,31 @@ internal static class Program
         }
     }
 
+    private static void TestSessionRelease()
+    {
+        var engine = Create(Kinds.Yeelight);
+        var bulb = engine.Bulbs[0];
+        var releasing = new TaskCompletionSource<bool>();
+        bulb.YeelightRelease = releasing.Task;
+        Invoke(engine, "TickYeelight", bulb, 1, DateTime.UtcNow);
+        Assert(!bulb.Connecting && bulb.Link == null, "Reconnect overlapped an unfinished previous release");
+        releasing.SetResult(true);
+        Invoke(engine, "ConnectYeelight", bulb);
+        int before = MusicLink.Released;
+        Invoke(engine, "SuspendLights");
+        Assert(bulb.Link == null && MusicLink.Released > before, "Suspend returned before release with power-off disabled");
+        Invoke(engine, "ResumeLights");
+        Invoke(engine, "ConnectYeelight", bulb);
+        before = MusicLink.Released;
+        engine.Dispose();
+        Assert(MusicLink.Released > before, "Engine disposal did not await Yeelight release");
+        Invoke(engine, "ConnectYeelight", bulb);
+        Assert(bulb.Link == null, "A connection reacquired music mode after shutdown");
+    }
+
     public static void Main()
     {
+        TestSessionRelease();
         TestPowerLifecycle();
         TestFrozenLights();
         TestKeyboardResume();

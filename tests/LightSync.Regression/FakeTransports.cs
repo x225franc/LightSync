@@ -69,7 +69,7 @@ namespace Ambilight.Lights
         public MusicLink(string ip, int port, IPAddress local) { }
         public static readonly List<string> PowerOffCalls = new List<string>();
         public static bool SendPowerOff(string ip, int port) { PowerOffCalls.Add(ip); return true; }
-        public bool Open() => true;
+        public bool Open(Func<bool> cancelled = null) => cancelled == null || !cancelled();
         public bool SetPower(bool on) { Calls.Add("power:" + on); return true; }
         public bool SetBrightness(int brightness) { Calls.Add("brightness:" + brightness); return true; }
         public bool SetColorAndBrightness(int rgb, int brightness) { Calls.Add($"scene:{rgb}:{brightness}"); return true; }
@@ -78,6 +78,7 @@ namespace Ambilight.Lights
         public bool SetCt(int kelvin) => true;
         public class Snapshot { public bool On; public int Brightness, ColorMode, Ct, Rgb; }
         public Snapshot QueryState() => null;
-        public void Dispose() { }
+        public static int Released;
+        public void Dispose() { System.Threading.Thread.Sleep(50); System.Threading.Interlocked.Increment(ref Released); }
     }
 }
