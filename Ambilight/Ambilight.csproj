@@ -209,6 +209,7 @@
     <Compile Include="DesktopDuplication\IDesktopDuplicatorReader.cs" />
     <Compile Include="Extensions\RawRectangleExtensions.cs" />
     <Compile Include="GUI\ColorWheel.cs" />
+    <Compile Include="GUI\LightsEffectEditor.cs" />
     <Compile Include="GUI\DarkContextMenuRenderer.cs" />
     <Compile Include="GUI\TraySettings.cs" />
     <Compile Include="Logic\ChromaFrameSender.cs" />

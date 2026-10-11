@@ -69,7 +69,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $backups = @()
 foreach ($artifact in @(@{ Name = 'LightSync-Plugin'; Path = $pluginStage },
     @{ Name = 'LightSync-Standalone'; Path = $standaloneStage })) {
-    $info = "Debug build`nSource commit: $revision`nBuilt: $stamp`nPer-light effects: Screen Ambilight, Solid Color, Breathing, Color Cycle, Rainbow Wave and Rainbow Wheel; saved color, speed and direction.`n"
+    $info = "Debug build`nSource commit: $revision`nBuilt: $stamp`nPer-light effects: Screen Ambilight, Solid Color, Breathing, Color Cycle, Rainbow Wave and Rainbow Wheel; saved color, speed and direction. Integrated color wheel and synchronized Apply to all lights preset with brightness.`n"
     Set-Content -LiteralPath (Join-Path $artifact.Path 'BUILD-INFO.txt') -Value $info -Encoding utf8
     $backup = Join-Path $downloads ("$($artifact.Name)-Debug-$stamp-$revision.zip")
     [IO.Compression.ZipFile]::CreateFromDirectory($artifact.Path, $backup, [IO.Compression.CompressionLevel]::Fastest, $false)

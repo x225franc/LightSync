@@ -431,6 +431,8 @@
                         <wpfui:ToggleSwitch x:Name="_lightsMasterToggle" Click="LightsMasterToggle_Click" />
                     </wpfui:CardControl>
 
+                    <StackPanel x:Name="_globalLightsEffectHost" Margin="0,0,0,16"/>
+
                     <TextBlock Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" Text="Razer Chroma Connect" />
                     <wpfui:CardControl Margin="0,0,0,4" Icon="Sparkle24">
                         <wpfui:CardControl.Header>

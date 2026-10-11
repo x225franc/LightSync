@@ -29,3 +29,28 @@ against both production engine variants with fake network transports, verifying
 independent effects, time-based colors, segment gradients, reverse, screen return,
 frozen keepalive, rate limits and the previous lifecycle/recovery protections.
 Physical appearance of all new effects on the user's lamps needs user validation.
+
+## Color wheel and global preset
+
+Solid Color/Breathing use the same hue/saturation wheel as Laptop keyboard,
+with a saved-color swatch. Brightness remains a separate slider.
+
+Expand **Global effect** at the top of Lights, select effect/color/speed/reverse/
+brightness, then click **Apply to all lights**. The operation applies to all
+currently known Yeelight/Govee entries, including their saved settings when
+unreachable. Disabled lights stay disabled. Group and canvas mappings are retained.
+The global panel's last applied values are saved alongside per-light settings.
+This is an explicit preset application, not a permanent override: individual
+settings remain editable; subsequently discovered lights are not automatically
+added to the preset until it is applied again.
+
+Applying a global preset resets the common animation clock. Each loop iteration
+uses one shared animation timestamp for all lights, so slow sends cannot change
+the following lights' calculated phase within that iteration. Network latency,
+per-device refresh rates and Yeelight's LAN quota still affect visible alignment.
+Changing a single light afterwards does not alter the others.
+
+Validation includes the actual WPF wheel's two-way binding and saved/external
+color updates, plus global preset values/brightness, disabled-light preservation,
+individual overrides and identical color calculations with delayed sends.
+Both production variants pass these tests and prior engine regressions.

@@ -236,6 +236,8 @@
                                      Checked="ControlToggle_Changed" Unchecked="ControlToggle_Changed" />
                 </ui:CardControl>
 
+                <StackPanel x:Name="GlobalLightsEffectHost" Margin="0,12,0,8"/>
+
                 <!-- Chroma status -->
                 <TextBlock Text="Razer Chroma Connect" FontSize="14" FontWeight="SemiBold" Margin="0,16,0,8" />
                 <ui:CardControl Margin="0,0,0,4">
@@ -397,9 +399,10 @@
                                         <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}" Visibility="{Binding EffectColorVisibility}">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="Color" VerticalAlignment="Center"/>
-                                            <ui:Button Grid.Column="1" HorizontalAlignment="Left" Command="{Binding PickEffectColorCommand}">
-                                                <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="20" Fill="{Binding EffectSwatch}" Margin="0,0,8,0"/><TextBlock Text="Choose color"/></StackPanel>
-                                            </ui:Button>
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Left">
+                                                <local:ColorWheel Width="140" Height="140" Margin="0,4,0,8" BoundColor="{Binding EffectColor, Mode=TwoWay}"/>
+                                                <Border Width="140" Height="20" CornerRadius="4" Background="{Binding EffectSwatch}"/>
+                                            </StackPanel>
                                         </Grid>
                                         <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}" Visibility="{Binding EffectSpeedVisibility}">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

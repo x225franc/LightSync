@@ -25,6 +25,12 @@ namespace Ambilight.GUI
         {
             _engine = LightsService.Engine;
             _lightsConfig = LightsService.Config;
+            if (_engine != null && _lightsConfig != null)
+            {
+                var editor = new LightsEffectEditor(_engine, _lightsConfig);
+                editor.Applied += (s, e) => RefreshLights();
+                GlobalLightsEffectHost.Children.Add(editor);
+            }
 
             if (_engine == null)
             {

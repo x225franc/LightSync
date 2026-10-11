@@ -31,6 +31,17 @@ namespace Ambilight.GUI
 
         public event EventHandler? ColorChanged;
 
+        public static readonly DependencyProperty BoundColorProperty = DependencyProperty.Register(
+            nameof(BoundColor), typeof(DrawingColor), typeof(ColorWheel),
+            new FrameworkPropertyMetadata(DrawingColor.White, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault,
+                (element, args) => ((ColorWheel)element).SelectedColor = (DrawingColor)args.NewValue));
+
+        public DrawingColor BoundColor
+        {
+            get => (DrawingColor)GetValue(BoundColorProperty);
+            set => SetValue(BoundColorProperty, value);
+        }
+
         public DrawingColor SelectedColor
         {
             get => ColorUtil.FromHsv(_hue, _saturation, _value);
@@ -123,6 +134,7 @@ namespace Ambilight.GUI
             _saturation = Math.Min(1, Math.Sqrt(dx * dx + dy * dy) / radius);
 
             InvalidateVisual();
+            SetCurrentValue(BoundColorProperty, SelectedColor);
             ColorChanged?.Invoke(this, EventArgs.Empty);
         }
 

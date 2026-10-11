@@ -71,6 +71,7 @@ namespace Ambilight.Lights
     public class Engine : IDisposable
     {
         readonly System.Diagnostics.Stopwatch _effectClock = System.Diagnostics.Stopwatch.StartNew();
+        double _effectFrameSeconds;
         const int TickMs = 16;                                       // ~60 loop iterations per second, so a new color is never left waiting
         static readonly TimeSpan KeepAlive = TimeSpan.FromSeconds(10);
         public const int SpreadGroup = 6;    // Govee only: "all zones" instead of a single one
@@ -427,6 +428,32 @@ namespace Ambilight.Lights
             bulb.LastSentAt = DateTime.MinValue;
         }
 
+        /// <summary>Apply one saved preset atomically, keeping enabled/group/canvas choices intact.</summary>
+        public void SetAllEffects(LightEffect effect, int color, int speed, bool reverse, int brightness)
+        {
+            lock (_powerGate)
+            {
+                _config.AllLightsEffect = Enum.IsDefined(typeof(LightEffect), effect) ? effect : LightEffect.ScreenAmbilight;
+                _config.AllLightsColor = color & 0xFFFFFF;
+                _config.AllLightsSpeed = Math.Max(0, Math.Min(100, speed));
+                _config.AllLightsReverse = reverse;
+                _config.AllLightsBrightness = Math.Max(1, Math.Min(100, brightness));
+                foreach (var bulb in Bulbs)
+                {
+                    bulb.Config.Effect = _config.AllLightsEffect;
+                    bulb.Config.EffectColor = _config.AllLightsColor;
+                    bulb.Config.EffectSpeed = _config.AllLightsSpeed;
+                    bulb.Config.EffectReverse = reverse;
+                    bulb.Config.Brightness = _config.AllLightsBrightness;
+                    bulb.BrightnessDirty = true;
+                    ApplyControlledChange(bulb);
+                }
+                _effectClock.Restart();
+                _effectFrameSeconds = 0;
+            }
+            ScheduleSave();
+        }
+
         public void SetEffect(BulbState bulb, LightEffect effect, int color, int speed, bool reverse)
         {
             lock (_powerGate)
@@ -753,6 +780,7 @@ namespace Ambilight.Lights
                 _nextRazerTry = now.AddSeconds(5);
             }
 
+            _effectFrameSeconds = _effectClock.Elapsed.TotalSeconds;
             UpdateSmoothing(now);
             bool enabled = _config.ControlEnabled;
             foreach (var b in Bulbs)
@@ -846,7 +874,7 @@ namespace Ambilight.Lights
 
             int rgb;
             if (b.Config.Effect != LightEffect.ScreenAmbilight)
-                rgb = EffectRgb(b, _effectClock.Elapsed.TotalSeconds);
+                rgb = EffectRgb(b, _effectFrameSeconds);
             else if (b.Config.UseScreenPosition)
             {
                 if (b.ScreenRgb < 0) return;      // no frame sampled yet
@@ -1019,7 +1047,7 @@ namespace Ambilight.Lights
                 {
                     int count = SegmentsOf(b);
                     var colors = new int[count];
-                    double seconds = _effectClock.Elapsed.TotalSeconds;
+                    double seconds = _effectFrameSeconds;
                     for (int i = 0; i < count; i++) colors[i] = EffectRgb(b, seconds, i, count);
                     b.CurrentRgb = Average(colors);
                     if (_govee.SegmentColors(b.Ip, b.LocalIp, colors))

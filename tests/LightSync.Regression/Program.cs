@@ -329,8 +329,72 @@ internal static class Program
         Console.WriteLine("PASS: independent effects, elapsed time, segment mapping, reverse, screen return, screensaver freeze and send pacing.");
     }
 
+    private static void TestAllLightsEffect()
+    {
+        var config = new Config();
+        config.Bulbs.Add(new BulbConfig { Id = "one", Kind = Kinds.Govee, Group = 1 });
+        config.Bulbs.Add(new BulbConfig { Id = "two", Kind = Kinds.Govee, Group = 3, UseScreenPosition = true });
+        config.Bulbs.Add(new BulbConfig { Id = "off", Kind = Kinds.Yeelight, Enabled = false });
+        using (var engine = new Engine(config))
+        {
+            engine.SetAllEffects(LightEffect.ColorCycle, 0x123456, 100, true, 42);
+            Assert(config.AllLightsEffect == LightEffect.ColorCycle && config.AllLightsBrightness == 42, "Global preset was not retained for saving");
+            Assert(engine.Bulbs.All(b => b.Config.Effect == LightEffect.ColorCycle && b.Config.EffectColor == 0x123456 && b.Config.EffectSpeed == 100 && b.Config.EffectReverse && b.Config.Brightness == 42), "Global preset skipped lights or parameters");
+            Assert(!engine.Bulbs[2].Config.Enabled && engine.Bulbs[1].Config.UseScreenPosition && engine.Bulbs[1].Config.Group == 3, "Global preset changed power or mapping choices");
+            int index = 0;
+            foreach (var bulb in engine.Bulbs.Take(2))
+            {
+                bulb.Ip = "127.0.0." + (++index);
+                bulb.LastSeenTicks = DateTime.UtcNow.Ticks;
+                bulb.GoveeReady = bulb.GoveeStreaming = true;
+            }
+            GoveeNet.Latest.SendDelayMs = 30;
+            Invoke(engine, "Tick");
+            Assert(GoveeNet.Latest.Frames["127.0.0.1"].SequenceEqual(GoveeNet.Latest.Frames["127.0.0.2"]), "Slow network sends caused per-light phase drift within a frame");
+            engine.SetEffect(engine.Bulbs[0], LightEffect.SolidColor, 0x00FF00, 0, false);
+            Assert(engine.Bulbs[1].Config.Effect == LightEffect.ColorCycle, "Individual edit changed another light");
+            engine.SetAllEffects(LightEffect.ScreenAmbilight, 0, 200, false, 0);
+            Assert(config.AllLightsSpeed == 100 && config.AllLightsBrightness == 1, "Global controls were not clamped");
+            Assert(engine.Bulbs[1].Config.UseScreenPosition && engine.Bulbs[1].Config.Group == 3, "Return to screen lost mappings");
+        }
+        Console.WriteLine("PASS: all-light preset, shared frame phase despite delayed sends, brightness, disabled-light preservation and individual overrides.");
+    }
+
+    public sealed class WheelColorSource : System.ComponentModel.INotifyPropertyChanged
+    {
+        private System.Drawing.Color _color;
+        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+        public System.Drawing.Color Color
+        {
+            get => _color;
+            set { _color = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Color))); }
+        }
+    }
+
+    private static void TestWheelBinding()
+    {
+        var source = new WheelColorSource { Color = System.Drawing.Color.FromArgb(20, 30, 40) };
+        var wheel = new Ambilight.GUI.ColorWheel();
+        int events = 0;
+        wheel.ColorChanged += (s, e) => events++;
+        System.Windows.Data.BindingOperations.SetBinding(wheel, Ambilight.GUI.ColorWheel.BoundColorProperty,
+            new System.Windows.Data.Binding(nameof(WheelColorSource.Color)) { Source = source });
+        Assert(wheel.SelectedColor.ToArgb() == source.Color.ToArgb(), "Saved color did not load into wheel");
+        source.Color = System.Drawing.Color.Blue;
+        Assert(wheel.SelectedColor.ToArgb() == source.Color.ToArgb() && events == 0, "External color update caused UI feedback or stale marker");
+        wheel.Measure(new System.Windows.Size(140, 140));
+        wheel.Arrange(new System.Windows.Rect(0, 0, 140, 140));
+        typeof(Ambilight.GUI.ColorWheel).GetMethod("UpdateFromPoint", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(wheel, new object[] { new System.Windows.Point(139, 70) });
+        Assert(source.Color.R > 240 && source.Color.G < 10 && source.Color.B < 10 && events == 1, "Wheel selection did not update the bound setting");
+        Console.WriteLine("PASS: color wheel saved-color loading, external resync, two-way selection and no feedback events.");
+    }
+
+    [STAThread]
     public static void Main()
     {
+        TestWheelBinding();
+        TestAllLightsEffect();
         TestLightEffects();
         TestSessionRelease();
         TestPowerLifecycle();

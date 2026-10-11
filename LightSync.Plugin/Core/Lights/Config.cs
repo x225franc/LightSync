@@ -134,6 +134,11 @@ namespace Ambilight.Lights
         }
         /// <summary>Master switch: when off, no device is controlled (they keep their last color).</summary>
         public bool ControlEnabled { get; set; } = true;
+        public LightEffect AllLightsEffect { get; set; } = LightEffect.ScreenAmbilight;
+        public int AllLightsColor { get; set; } = 0xFF0080;
+        public int AllLightsSpeed { get; set; } = 50;
+        public bool AllLightsReverse { get; set; }
+        public int AllLightsBrightness { get; set; } = 100;
         public bool TurnOffOnSuspendOrShutdown { get; set; }
         public bool TurnOnAtStartupOrResume { get; set; }
         /// <summary>Maximum color updates per second sent to each Govee device (Chroma itself only produces ~20/s).</summary>

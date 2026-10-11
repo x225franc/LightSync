@@ -60,6 +60,13 @@ public partial class LightSyncPage : UiPage
         _interpolateToggle.IsChecked = LightsService.Engine?.Interpolate ?? false;
         LoadMonitorCombo();
 
+        _globalLightsEffectHost.Children.Clear();
+        if (LightsService.Engine is { } globalEngine && LightsService.Config is { } globalConfig)
+        {
+            var editor = new LightsEffectEditor(globalEngine, globalConfig);
+            editor.Applied += (_, _) => RefreshBulbList(force: true);
+            _globalLightsEffectHost.Children.Add(editor);
+        }
         var engineForLights = LightsService.Engine;
         _yeelightOffBelowSlider.Value = engineForLights?.YeelightOffBelow ?? 0;
         _yeelightFadeMsSlider.Value = engineForLights?.YeelightFadeMs ?? 400;
@@ -858,11 +865,11 @@ public partial class LightSyncPage : UiPage
         var effectCombo = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Left, ItemsSource = LightEffects.Names, SelectedIndex = (int)bulb.Config.Effect };
         var effectSpeed = new Slider { Minimum = 0, Maximum = 100, TickFrequency = 1, IsSnapToTickEnabled = true, Value = bulb.Config.EffectSpeed };
         var effectReverse = new ToggleSwitch { IsChecked = bulb.Config.EffectReverse, HorizontalAlignment = HorizontalAlignment.Left };
-        var colorButton = new Wpf.Ui.Controls.Button { Content = "Choose color", HorizontalAlignment = HorizontalAlignment.Left };
-        var effectSwatch = new Ellipse { Width = 20, Height = 20, Margin = new Thickness(0, 0, 8, 0) };
-        var colorContent = new StackPanel { Orientation = Orientation.Horizontal };
+        var colorWheel = new ColorWheel { Width = 140, Height = 140, Margin = new Thickness(0, 4, 0, 8), SelectedColor = System.Drawing.Color.FromArgb((bulb.Config.EffectColor >> 16) & 255, (bulb.Config.EffectColor >> 8) & 255, bulb.Config.EffectColor & 255) };
+        var effectSwatch = new Border { Width = 140, Height = 20, CornerRadius = new CornerRadius(4) };
+        var colorContent = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
+        colorContent.Children.Add(colorWheel);
         colorContent.Children.Add(effectSwatch);
-        colorContent.Children.Add(colorButton);
         var colorRow = LabeledRow("Color", colorContent);
         var speedRow = LabeledRow("Speed", effectSpeed);
         var reverseRow = LabeledRow("Reverse", effectReverse);
@@ -877,7 +884,8 @@ public partial class LightSyncPage : UiPage
             groupRow.IsEnabled = bulb.Config.Enabled && effect == LightEffect.ScreenAmbilight && !bulb.Config.UseScreenPosition;
             canvasRow.IsEnabled = bulb.Config.Enabled && effect == LightEffect.ScreenAmbilight;
             effectCombo.IsEnabled = colorRow.IsEnabled = speedRow.IsEnabled = reverseRow.IsEnabled = bulb.Config.Enabled;
-            effectSwatch.Fill = new WpfSolidColorBrush(RgbToWpfColor(bulb.Config.EffectColor));
+            effectSwatch.Background = new WpfSolidColorBrush(RgbToWpfColor(bulb.Config.EffectColor));
+            colorWheel.SelectedColor = System.Drawing.Color.FromArgb((bulb.Config.EffectColor >> 16) & 255, (bulb.Config.EffectColor >> 8) & 255, bulb.Config.EffectColor & 255);
         }
         void SaveEffect()
         {
@@ -888,13 +896,10 @@ public partial class LightSyncPage : UiPage
         effectCombo.SelectionChanged += (_, _) => SaveEffect();
         effectSpeed.ValueChanged += (_, _) => SaveEffect();
         effectReverse.Click += (_, _) => SaveEffect();
-        colorButton.Click += (_, _) =>
+        colorWheel.ColorChanged += (_, _) =>
         {
-            using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
-            int rgb = bulb.Config.EffectColor;
-            dialog.Color = System.Drawing.Color.FromArgb((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
-            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-            var c = dialog.Color;
+            if (_isUpdatingUi) return;
+            var c = colorWheel.SelectedColor;
             engine.SetEffect(bulb, bulb.Config.Effect, (c.R << 16) | (c.G << 8) | c.B, bulb.Config.EffectSpeed, bulb.Config.EffectReverse);
             UpdateEffectControls();
         };

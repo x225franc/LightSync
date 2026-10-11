@@ -24,18 +24,6 @@ namespace Ambilight.GUI
         public BulbViewModel(Engine engine, BulbState state)
         {
             _engine = engine; State = state;
-            PickEffectColorCommand = new RelayCommand(() =>
-            {
-                using (var dialog = new System.Windows.Forms.ColorDialog())
-                {
-                    int rgb = State.Config.EffectColor;
-                    dialog.Color = System.Drawing.Color.FromArgb((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
-                    dialog.FullOpen = true;
-                    if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                    var c = dialog.Color;
-                    SetEffect(State.Config.Effect, (c.R << 16) | (c.G << 8) | c.B, State.Config.EffectSpeed, State.Config.EffectReverse);
-                }
-            });
             PreviewCommand = new RelayCommand(() => _engine.Identify(State));
             RemoveCommand = new RelayCommand(() =>
             {
@@ -52,7 +40,6 @@ namespace Ambilight.GUI
 
         /// <summary>Blinks the device so it can be told apart from the others.</summary>
         public ICommand PreviewCommand { get; private set; }
-        public ICommand PickEffectColorCommand { get; private set; }
         public string[] EffectNames { get { return LightEffects.Names; } }
         public int EffectIndex
         {
@@ -69,6 +56,11 @@ namespace Ambilight.GUI
         {
             get { return State.Config.EffectReverse; }
             set { SetEffect(State.Config.Effect, State.Config.EffectColor, State.Config.EffectSpeed, value); }
+        }
+        public System.Drawing.Color EffectColor
+        {
+            get { int rgb = State.Config.EffectColor; return System.Drawing.Color.FromArgb((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255); }
+            set { SetEffect(State.Config.Effect, (value.R << 16) | (value.G << 8) | value.B, State.Config.EffectSpeed, State.Config.EffectReverse); }
         }
         public Brush EffectSwatch { get { int c = State.Config.EffectColor; return Frozen((byte)(c >> 16), (byte)(c >> 8), (byte)c); } }
         public bool ScreenControlsEnabled { get { return Enabled && State.Config.Effect == LightEffect.ScreenAmbilight; } }
@@ -225,7 +217,7 @@ namespace Ambilight.GUI
             Raise("Title"); Raise("Subtitle"); Raise("StatusText"); Raise("StatusBrush"); Raise("Swatch");
             Raise("Brightness"); Raise("BrightnessText");     // a new Govee device starts from its own brightness
             Raise("Enabled"); Raise("UseScreenPosition"); Raise("GroupEnabled");
-            Raise("EffectIndex"); Raise("EffectSpeed"); Raise("EffectReverse"); Raise("EffectSwatch");
+            Raise("EffectIndex"); Raise("EffectSpeed"); Raise("EffectReverse"); Raise("EffectSwatch"); Raise("EffectColor");
             Raise("ScreenControlsEnabled"); Raise("EffectColorVisibility"); Raise("EffectSpeedVisibility"); Raise("EffectReverseVisibility");
         }
 
