@@ -70,6 +70,7 @@ namespace Ambilight.Lights
     /// </summary>
     public class Engine : IDisposable
     {
+        readonly System.Diagnostics.Stopwatch _effectClock = System.Diagnostics.Stopwatch.StartNew();
         const int TickMs = 16;                                       // ~60 loop iterations per second, so a new color is never left waiting
         static readonly TimeSpan KeepAlive = TimeSpan.FromSeconds(10);
         public const int SpreadGroup = 6;    // Govee only: "all zones" instead of a single one
@@ -424,6 +425,25 @@ namespace Ambilight.Lights
             // A group/canvas change only needs a new color, not a power/stream reset.
             if (!bulb.GoveeStreaming) { bulb.GoveeReady = false; bulb.GoveeInitStep = 0; }
             bulb.LastSentAt = DateTime.MinValue;
+        }
+
+        public void SetEffect(BulbState bulb, LightEffect effect, int color, int speed, bool reverse)
+        {
+            lock (_powerGate)
+            {
+                bulb.Config.Effect = Enum.IsDefined(typeof(LightEffect), effect) ? effect : LightEffect.ScreenAmbilight;
+                bulb.Config.EffectColor = color & 0xFFFFFF;
+                bulb.Config.EffectSpeed = Math.Max(0, Math.Min(100, speed));
+                bulb.Config.EffectReverse = reverse;
+                ApplyControlledChange(bulb);
+            }
+            ScheduleSave();
+        }
+
+        int EffectRgb(BulbState bulb, double seconds, int index = 0, int count = 1)
+        {
+            var c = bulb.Config;
+            return LightEffects.Color(c.Effect, c.EffectColor, c.EffectSpeed, c.EffectReverse, seconds, index, count);
         }
 
         public void SetBrightness(BulbState bulb, int percent)
@@ -825,7 +845,9 @@ namespace Ambilight.Lights
             if (b.BrightnessDirty) { b.BrightnessDirty = false; b.LastSentRgb = -1; }    // the new setting is applied with the next color
 
             int rgb;
-            if (b.Config.UseScreenPosition)
+            if (b.Config.Effect != LightEffect.ScreenAmbilight)
+                rgb = EffectRgb(b, _effectClock.Elapsed.TotalSeconds);
+            else if (b.Config.UseScreenPosition)
             {
                 if (b.ScreenRgb < 0) return;      // no frame sampled yet
                 rgb = b.ScreenRgb;
@@ -850,7 +872,7 @@ namespace Ambilight.Lights
             // Two thresholds so a scene hovering around the limit does not make the bulb flicker.
             int offLevel = (int)Math.Round(YeelightOffBelow * 255 / 100.0);       // switch off at or below this level...
             int onLevel = offLevel + Math.Max(4, offLevel / 2);                    // ...and back on only once clearly above it
-            bool dark = offLevel > 0 && (b.YeelightOff ? level < onLevel : level <= offLevel);
+            bool dark = b.Config.Effect == LightEffect.ScreenAmbilight && offLevel > 0 && (b.YeelightOff ? level < onLevel : level <= offLevel);
             if (dark)
             {
                 if (b.YeelightOff) return;
@@ -991,7 +1013,25 @@ namespace Ambilight.Lights
 
             double sinceMs = (now - b.LastSentAt).TotalMilliseconds;
             bool due = sinceMs >= 1000.0 / GoveeFps;
-            if (b.Config.UseScreenPosition)
+            if (b.Config.Effect != LightEffect.ScreenAmbilight)
+            {
+                if (due)
+                {
+                    int count = SegmentsOf(b);
+                    var colors = new int[count];
+                    double seconds = _effectClock.Elapsed.TotalSeconds;
+                    for (int i = 0; i < count; i++) colors[i] = EffectRgb(b, seconds, i, count);
+                    b.CurrentRgb = Average(colors);
+                    if (_govee.SegmentColors(b.Ip, b.LocalIp, colors))
+                    {
+                        b.LastSentAt = now;
+                        b.LastSentRgb = b.CurrentRgb;
+                        b.LastStreamRgb = b.CurrentRgb;
+                        b.LastStreamColors = colors;
+                    }
+                }
+            }
+            else if (b.Config.UseScreenPosition)
             {
                 if (b.ScreenRgb < 0) return;      // no frame sampled yet
                 var colors = b.ScreenColors;

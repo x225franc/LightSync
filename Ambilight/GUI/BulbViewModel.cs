@@ -24,6 +24,18 @@ namespace Ambilight.GUI
         public BulbViewModel(Engine engine, BulbState state)
         {
             _engine = engine; State = state;
+            PickEffectColorCommand = new RelayCommand(() =>
+            {
+                using (var dialog = new System.Windows.Forms.ColorDialog())
+                {
+                    int rgb = State.Config.EffectColor;
+                    dialog.Color = System.Drawing.Color.FromArgb((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+                    dialog.FullOpen = true;
+                    if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+                    var c = dialog.Color;
+                    SetEffect(State.Config.Effect, (c.R << 16) | (c.G << 8) | c.B, State.Config.EffectSpeed, State.Config.EffectReverse);
+                }
+            });
             PreviewCommand = new RelayCommand(() => _engine.Identify(State));
             RemoveCommand = new RelayCommand(() =>
             {
@@ -40,6 +52,35 @@ namespace Ambilight.GUI
 
         /// <summary>Blinks the device so it can be told apart from the others.</summary>
         public ICommand PreviewCommand { get; private set; }
+        public ICommand PickEffectColorCommand { get; private set; }
+        public string[] EffectNames { get { return LightEffects.Names; } }
+        public int EffectIndex
+        {
+            get { return (int)State.Config.Effect; }
+            set { if (value < 0 || value >= LightEffects.Names.Length || value == EffectIndex) return;
+                SetEffect((LightEffect)value, State.Config.EffectColor, State.Config.EffectSpeed, State.Config.EffectReverse); }
+        }
+        public double EffectSpeed
+        {
+            get { return State.Config.EffectSpeed; }
+            set { SetEffect(State.Config.Effect, State.Config.EffectColor, (int)Math.Round(value), State.Config.EffectReverse); }
+        }
+        public bool EffectReverse
+        {
+            get { return State.Config.EffectReverse; }
+            set { SetEffect(State.Config.Effect, State.Config.EffectColor, State.Config.EffectSpeed, value); }
+        }
+        public Brush EffectSwatch { get { int c = State.Config.EffectColor; return Frozen((byte)(c >> 16), (byte)(c >> 8), (byte)c); } }
+        public bool ScreenControlsEnabled { get { return Enabled && State.Config.Effect == LightEffect.ScreenAmbilight; } }
+        public System.Windows.Visibility EffectColorVisibility { get { return State.Config.Effect == LightEffect.SolidColor || State.Config.Effect == LightEffect.Breathing ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed; } }
+        public System.Windows.Visibility EffectSpeedVisibility { get { return State.Config.Effect != LightEffect.ScreenAmbilight && State.Config.Effect != LightEffect.SolidColor ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed; } }
+        public System.Windows.Visibility EffectReverseVisibility { get { return State.Config.Effect == LightEffect.RainbowWave || State.Config.Effect == LightEffect.RainbowWheel ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed; } }
+        void SetEffect(LightEffect effect, int color, int speed, bool reverse)
+        {
+            if (effect == State.Config.Effect && color == State.Config.EffectColor && speed == State.Config.EffectSpeed && reverse == State.Config.EffectReverse) return;
+            _engine.SetEffect(State, effect, color, speed, reverse);
+            Refresh();
+        }
 
         /// <summary>Forgets the device entirely (asks for confirmation first).</summary>
         public ICommand RemoveCommand { get; private set; }
@@ -177,13 +218,15 @@ namespace Ambilight.GUI
         }
 
         /// <summary>Whether the Chroma group picker should be enabled (on, and not using the canvas instead).</summary>
-        public bool GroupEnabled { get { return State.Config.Enabled && !State.Config.UseScreenPosition; } }
+        public bool GroupEnabled { get { return ScreenControlsEnabled && !State.Config.UseScreenPosition; } }
 
         public void Refresh()
         {
             Raise("Title"); Raise("Subtitle"); Raise("StatusText"); Raise("StatusBrush"); Raise("Swatch");
             Raise("Brightness"); Raise("BrightnessText");     // a new Govee device starts from its own brightness
             Raise("Enabled"); Raise("UseScreenPosition"); Raise("GroupEnabled");
+            Raise("EffectIndex"); Raise("EffectSpeed"); Raise("EffectReverse"); Raise("EffectSwatch");
+            Raise("ScreenControlsEnabled"); Raise("EffectColorVisibility"); Raise("EffectSpeedVisibility"); Raise("EffectReverseVisibility");
         }
 
         static Brush Frozen(byte r, byte g, byte b)

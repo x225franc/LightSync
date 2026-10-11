@@ -32,7 +32,13 @@ namespace Ambilight.Lights
         /// light back on resumes on the same Chroma group instead of asking it to be picked again).</summary>
         public bool Enabled { get; set; } = true;
         /// <summary>Whether this device is actually driven right now: switched on, and assigned to a group or a screen position.</summary>
-        [JsonIgnore] public bool Controlled { get { return Enabled && (Group > 0 || UseScreenPosition); } }
+        [JsonIgnore] public bool Controlled { get { return Enabled && (Effect != LightEffect.ScreenAmbilight || Group > 0 || UseScreenPosition); } }
+
+        /// <summary>Screen Ambilight preserves existing group/canvas behavior; other effects are generated locally.</summary>
+        public LightEffect Effect { get; set; } = LightEffect.ScreenAmbilight;
+        public int EffectColor { get; set; } = 0xFF0080;
+        public int EffectSpeed { get; set; } = 50;
+        public bool EffectReverse { get; set; }
 
         /// <summary>When on, this device ignores Group/Chroma Connect entirely and is fed straight from a rectangle of the
         /// screen the user placed on the lights canvas (Pos*, fractions of the screen 0-1) - no 4-zone limit, no Razer
@@ -176,10 +182,13 @@ namespace Ambilight.Lights
                         if (cfg.RazerCanvas == null) cfg.RazerCanvas = new Dictionary<string, DeviceCanvasPosition>();
                         foreach (var b in cfg.Bulbs)
                         {
+                            if (!Enum.IsDefined(typeof(LightEffect), b.Effect)) b.Effect = LightEffect.ScreenAmbilight;
+                            b.EffectColor &= 0xFFFFFF;
+                            b.EffectSpeed = Math.Max(0, Math.Min(100, b.EffectSpeed));
                             if (string.IsNullOrEmpty(b.Kind)) b.Kind = Kinds.Yeelight;
                             // Configs written before the on/off toggle used Group = 0 for "off". The combo box no
                             // longer has that entry, so give it a real group to show and keep it off with the toggle.
-                            if (b.Group == 0) { b.Group = 1; b.Enabled = false; }
+                            if (b.Group == 0 && b.Effect == LightEffect.ScreenAmbilight) { b.Group = 1; b.Enabled = false; }
                             // The canvas box's default size shrank (0.2 -> 0.17, ~15%); a box still at the exact old
                             // default was never resized by hand, so it shrinks along with the new default too.
                             if (b.PosW == 0.2 && b.PosH == 0.2) { b.PosW = 0.17; b.PosH = 0.17; }

@@ -389,6 +389,28 @@
                                                         Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
                                         </Grid>
 
+                                        <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Effect" VerticalAlignment="Center"/>
+                                            <ComboBox Grid.Column="1" Width="230" HorizontalAlignment="Left" ItemsSource="{Binding EffectNames}" SelectedIndex="{Binding EffectIndex, Mode=TwoWay}"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}" Visibility="{Binding EffectColorVisibility}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Color" VerticalAlignment="Center"/>
+                                            <ui:Button Grid.Column="1" HorizontalAlignment="Left" Command="{Binding PickEffectColorCommand}">
+                                                <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="20" Fill="{Binding EffectSwatch}" Margin="0,0,8,0"/><TextBlock Text="Choose color"/></StackPanel>
+                                            </ui:Button>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}" Visibility="{Binding EffectSpeedVisibility}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Speed" VerticalAlignment="Center"/>
+                                            <Slider Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding EffectSpeed, Mode=TwoWay}"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}" Visibility="{Binding EffectReverseVisibility}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Reverse" VerticalAlignment="Center"/>
+                                            <ui:ToggleSwitch Grid.Column="1" HorizontalAlignment="Left" IsChecked="{Binding EffectReverse, Mode=TwoWay}"/>
+                                        </Grid>
                                         <Grid Margin="0,0,0,8">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="112" />
@@ -414,7 +436,7 @@
                                             </ComboBox>
                                         </Grid>
 
-                                        <Grid Margin="0,0,0,8" IsEnabled="{Binding Enabled}">
+                                        <Grid Margin="0,0,0,8" IsEnabled="{Binding ScreenControlsEnabled}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="112" />
                                                 <ColumnDefinition Width="*" />

@@ -10,9 +10,12 @@ namespace Ambilight.Lights
     {
         public string Id, Kind, Name;
         public int Group = 1, Brightness = 80;
+        public LightEffect Effect;
+        public int EffectColor = 0xFF0080, EffectSpeed = 50;
+        public bool EffectReverse;
         public bool Enabled = true, UseScreenPosition;
         public double PosX, PosY, PosW, PosH;
-        public bool Controlled => Enabled && (Group > 0 || UseScreenPosition);
+        public bool Controlled => Enabled && (Effect != LightEffect.ScreenAmbilight || Group > 0 || UseScreenPosition);
     }
     public class Config
     {

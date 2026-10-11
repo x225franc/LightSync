@@ -38,7 +38,7 @@ namespace Ambilight.Logic
 
             foreach (var b in engine.Bulbs)
             {
-                if (!b.Config.UseScreenPosition || !b.Config.Enabled) continue;
+                if (b.Config.Effect != LightEffect.ScreenAmbilight || !b.Config.UseScreenPosition || !b.Config.Enabled) continue;
 
                 int segments = b.Kind == DeviceKind.Govee ? GoveeCatalog.SegmentCount(b.Config.Id, b.Model) : 1;
                 if (segments <= 1)

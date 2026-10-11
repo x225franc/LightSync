@@ -250,6 +250,7 @@
     <Compile Include="Lights\Config.cs" />
     <Compile Include="Lights\Discovery.cs" />
     <Compile Include="Lights\Engine.cs" />
+    <Compile Include="Lights\LightEffects.cs" />
     <Compile Include="Lights\ExternalApps.cs" />
     <Compile Include="Lights\Firewall.cs" />
     <Compile Include="Lights\GoveeCatalog.cs" />

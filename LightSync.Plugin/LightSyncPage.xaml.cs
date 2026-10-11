@@ -636,6 +636,10 @@ public partial class LightSyncPage : UiPage
         public required ToggleSwitch EnabledToggle;
         public required ComboBox GroupCombo;
         public required ToggleSwitch CanvasToggle;
+        public required ComboBox EffectCombo;
+        public required Slider EffectSpeed;
+        public required ToggleSwitch EffectReverse;
+        public required Action UpdateEffectControls;
     }
 
     private readonly Dictionary<string, BulbRow> _bulbRows = new();
@@ -705,6 +709,10 @@ public partial class LightSyncPage : UiPage
                 var groupIndex = GroupToIndex(bulb.Config.Group);
                 if (row.GroupCombo.SelectedIndex != groupIndex) row.GroupCombo.SelectedIndex = groupIndex;
                 if (row.CanvasToggle.IsChecked != bulb.Config.UseScreenPosition) row.CanvasToggle.IsChecked = bulb.Config.UseScreenPosition;
+                row.EffectCombo.SelectedIndex = (int)bulb.Config.Effect;
+                row.EffectSpeed.Value = bulb.Config.EffectSpeed;
+                row.EffectReverse.IsChecked = bulb.Config.EffectReverse;
+                row.UpdateEffectControls();
             }
         }
         finally
@@ -847,10 +855,59 @@ public partial class LightSyncPage : UiPage
         brightnessRow.Children.Add(brightnessSlider);
         brightnessRow.Children.Add(brightnessValue);
 
+        var effectCombo = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Left, ItemsSource = LightEffects.Names, SelectedIndex = (int)bulb.Config.Effect };
+        var effectSpeed = new Slider { Minimum = 0, Maximum = 100, TickFrequency = 1, IsSnapToTickEnabled = true, Value = bulb.Config.EffectSpeed };
+        var effectReverse = new ToggleSwitch { IsChecked = bulb.Config.EffectReverse, HorizontalAlignment = HorizontalAlignment.Left };
+        var colorButton = new Wpf.Ui.Controls.Button { Content = "Choose color", HorizontalAlignment = HorizontalAlignment.Left };
+        var effectSwatch = new Ellipse { Width = 20, Height = 20, Margin = new Thickness(0, 0, 8, 0) };
+        var colorContent = new StackPanel { Orientation = Orientation.Horizontal };
+        colorContent.Children.Add(effectSwatch);
+        colorContent.Children.Add(colorButton);
+        var colorRow = LabeledRow("Color", colorContent);
+        var speedRow = LabeledRow("Speed", effectSpeed);
+        var reverseRow = LabeledRow("Reverse", effectReverse);
+        var groupRow = LabeledRow("Chroma group", groupCombo);
+        var canvasRow = LabeledRow("Screen canvas", canvasToggle);
+        void UpdateEffectControls()
+        {
+            var effect = bulb.Config.Effect;
+            colorRow.Visibility = effect is LightEffect.SolidColor or LightEffect.Breathing ? Visibility.Visible : Visibility.Collapsed;
+            speedRow.Visibility = effect is LightEffect.ScreenAmbilight or LightEffect.SolidColor ? Visibility.Collapsed : Visibility.Visible;
+            reverseRow.Visibility = effect is LightEffect.RainbowWave or LightEffect.RainbowWheel ? Visibility.Visible : Visibility.Collapsed;
+            groupRow.IsEnabled = bulb.Config.Enabled && effect == LightEffect.ScreenAmbilight && !bulb.Config.UseScreenPosition;
+            canvasRow.IsEnabled = bulb.Config.Enabled && effect == LightEffect.ScreenAmbilight;
+            effectCombo.IsEnabled = colorRow.IsEnabled = speedRow.IsEnabled = reverseRow.IsEnabled = bulb.Config.Enabled;
+            effectSwatch.Fill = new WpfSolidColorBrush(RgbToWpfColor(bulb.Config.EffectColor));
+        }
+        void SaveEffect()
+        {
+            if (_isUpdatingUi || effectCombo.SelectedIndex < 0) return;
+            engine.SetEffect(bulb, (LightEffect)effectCombo.SelectedIndex, bulb.Config.EffectColor, (int)effectSpeed.Value, effectReverse.IsChecked ?? false);
+            UpdateEffectControls();
+        }
+        effectCombo.SelectionChanged += (_, _) => SaveEffect();
+        effectSpeed.ValueChanged += (_, _) => SaveEffect();
+        effectReverse.Click += (_, _) => SaveEffect();
+        colorButton.Click += (_, _) =>
+        {
+            using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
+            int rgb = bulb.Config.EffectColor;
+            dialog.Color = System.Drawing.Color.FromArgb((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+            var c = dialog.Color;
+            engine.SetEffect(bulb, bulb.Config.Effect, (c.R << 16) | (c.G << 8) | c.B, bulb.Config.EffectSpeed, bulb.Config.EffectReverse);
+            UpdateEffectControls();
+        };
+        UpdateEffectControls();
+
         var content = new StackPanel();
         content.Children.Add(LabeledRow("Name", nameBox));
-        content.Children.Add(LabeledRow("Chroma group", groupCombo));
-        content.Children.Add(LabeledRow("Screen canvas", canvasToggle));
+        content.Children.Add(LabeledRow("Effect", effectCombo));
+        content.Children.Add(colorRow);
+        content.Children.Add(speedRow);
+        content.Children.Add(reverseRow);
+        content.Children.Add(groupRow);
+        content.Children.Add(canvasRow);
         content.Children.Add(LabeledRow("Brightness", brightnessRow));
 
         var card = new StackPanel();
@@ -875,6 +932,10 @@ public partial class LightSyncPage : UiPage
             EnabledToggle = enabledToggle,
             GroupCombo = groupCombo,
             CanvasToggle = canvasToggle,
+            EffectCombo = effectCombo,
+            EffectSpeed = effectSpeed,
+            EffectReverse = effectReverse,
+            UpdateEffectControls = UpdateEffectControls,
         };
 
         return (border, row);

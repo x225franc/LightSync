@@ -277,8 +277,61 @@ internal static class Program
         Assert(bulb.Link == null, "A connection reacquired music mode after shutdown");
     }
 
+    private static void TestLightEffects()
+    {
+        Assert(LightEffects.Color(LightEffect.SolidColor, 0x123456, 50, false, 200, 0, 1) == 0x123456, "Solid color drifted with time");
+        Assert(LightEffects.Color(LightEffect.ColorCycle, 0, 0, false, 0, 0, 1) == 0xFF0000, "Color cycle initial hue");
+        Assert(LightEffects.Color(LightEffect.ColorCycle, 0, 0, false, 4, 0, 1) == 0xFFFF00, "Color cycle does not follow elapsed time");
+        int dim = LightEffects.Color(LightEffect.Breathing, 0xFF0000, 0, false, 0, 0, 1);
+        Assert(dim > 0 && dim < 0xFF0000 && LightEffects.Color(LightEffect.Breathing, 0xFF0000, 0, false, 3, 0, 1) == 0xFF0000, "Breathing intensity/period incorrect");
+        Assert(LightEffects.Color(LightEffect.RainbowWave, 0, 50, false, 0.1, 1, 4) != LightEffects.Color(LightEffect.RainbowWave, 0, 50, true, 0.1, 1, 4), "Reverse has no effect");
+        Assert(LightEffects.Color(LightEffect.RainbowWheel, 0, 0, false, 0, 3, 4) != LightEffects.Color(LightEffect.RainbowWave, 0, 0, false, 0, 3, 4), "Ring topology duplicates wave endpoints");
+        using (var engine = Create(Kinds.Govee))
+        {
+            var bulb = engine.Bulbs[0];
+            var now = DateTime.UtcNow;
+            bulb.GoveeReady = bulb.GoveeStreaming = true;
+            bulb.LastSeenTicks = now.Ticks;
+            bulb.Config.Group = 0;
+            bulb.Config.UseScreenPosition = true;
+            bulb.ScreenRgb = 0x0000FF;
+            engine.SetEffect(bulb, LightEffect.SolidColor, 0xFF0000, 50, false);
+            Assert(bulb.Config.Controlled, "An independent effect requires a screen group");
+            Invoke(engine, "TickGovee", bulb, 0, now);
+            Assert(GoveeNet.Latest.LastGradient.All(c => c == 0xFF0000), "Screen canvas overwrote solid effect");
+            int calls = GoveeNet.Latest.Calls.Count;
+            Invoke(engine, "TickGovee", bulb, 0, now.AddMilliseconds(1));
+            Assert(GoveeNet.Latest.Calls.Count == calls, "Effect bypassed Govee frame limit");
+            engine.SetEffect(bulb, LightEffect.RainbowWave, 0, 50, false);
+            Invoke(engine, "TickGovee", bulb, 0, now.AddSeconds(1));
+            var gradient = GoveeNet.Latest.LastGradient.ToArray();
+            Assert(gradient.Length == 4 && gradient.Distinct().Count() > 1, "Rainbow lost physical segment colors");
+            ScreenState.CapturePaused = true;
+            Invoke(engine, "TickGovee", bulb, 0, now.AddSeconds(2));
+            Assert(GoveeNet.Latest.LastGradient.SequenceEqual(gradient), "Screensaver did not freeze the generated effect");
+            ScreenState.CapturePaused = false;
+            engine.SetEffect(bulb, LightEffect.ScreenAmbilight, 0, 50, false);
+            Invoke(engine, "TickGovee", bulb, 0, now.AddSeconds(3));
+            Assert(bulb.LastStreamRgb == 0x0000FF, "Returning to screen effect lost the canvas mapping");
+        }
+        using (var engine = Create(Kinds.Yeelight))
+        {
+            var bulb = engine.Bulbs[0];
+            bulb.Link = new MusicLink(bulb.Ip, bulb.Port, bulb.LocalIp);
+            engine.YeelightOffBelow = 50;
+            engine.SetEffect(bulb, LightEffect.SolidColor, 0x010000, 50, false);
+            Invoke(engine, "TickYeelight", bulb, 1, DateTime.UtcNow);
+            Assert(bulb.Link.Calls.SequenceEqual(new[] { "scene:16711680:1" }), "Dark autonomous color triggered screen dark/off behavior");
+            var before = bulb.Link.Calls.Count;
+            Invoke(engine, "TickYeelight", bulb, 1, DateTime.UtcNow.AddMilliseconds(1));
+            Assert(bulb.Link.Calls.Count == before, "Solid effect flooded Yeelight");
+        }
+        Console.WriteLine("PASS: independent effects, elapsed time, segment mapping, reverse, screen return, screensaver freeze and send pacing.");
+    }
+
     public static void Main()
     {
+        TestLightEffects();
         TestSessionRelease();
         TestPowerLifecycle();
         TestFrozenLights();
