@@ -1,6 +1,6 @@
 # Builds Debug, backs up the new artifacts in Downloads, deploys both applications,
 # and restarts only the applications that were running before deployment.
-param([switch]$SkipBuild)
+param([switch]$SkipBuild, [switch]$BackupOnly)
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -66,6 +66,7 @@ if (Test-Path -LiteralPath (Join-Path $standaloneBuild 'Package')) {
 }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+foreach ($artifactRoot in @($pluginStage, $standaloneStage)) { Copy-Item -LiteralPath (Join-Path $repoRoot 'YEELIGHT-MUSIC-MODE.md') -Destination $artifactRoot }
 $backups = @()
 foreach ($artifact in @(@{ Name = 'LightSync-Plugin'; Path = $pluginStage },
     @{ Name = 'LightSync-Standalone'; Path = $standaloneStage })) {
@@ -76,6 +77,8 @@ foreach ($artifact in @(@{ Name = 'LightSync-Plugin'; Path = $pluginStage },
     $backups += $backup
     Write-Output "Backup: $backup"
 }
+
+if ($BackupOnly) { Write-Output 'Builds packaged without enabling or restarting applications.'; return }
 
 $toolkitProcesses = @(Get-Process -Name 'Lenovo Legion Toolkit' -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -ieq $toolkitExe })
