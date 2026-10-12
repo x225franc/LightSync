@@ -38,10 +38,6 @@ namespace Ambilight.Lights
         internal int FpsCap = int.MaxValue;   // Yeelight: lowered when this bulb keeps closing its session (a weak bulb or Wi-Fi link)
         internal DateTime LinkSince;
         internal int LastSentRgb = -1;       // Govee: last color; Yeelight: last (color, brightness) pair as one number
-        // Yeelight only: timestamps of recent commands, for the real device quota (60/min) - see
-        // Engine.CanSendYeelight. A queue, not a counter, so the 60 s window actually rolls instead of resetting
-        // in a hard step every minute.
-        internal readonly Queue<DateTime> YeelightSendTimes = new Queue<DateTime>();
         internal bool YeelightOff;            // Yeelight: turned off because the mapped part of the screen is black
         internal bool YeelightFading;         // Yeelight: fading out just before switching off
         internal DateTime YeelightFadeStart;
@@ -381,15 +377,11 @@ namespace Ambilight.Lights
             set { _config.YeelightFadeMs = Math.Max(0, Math.Min(1500, value)); ScheduleSave(); }
         }
 
-        /// <summary>Max burst pace for Yeelight color updates - how quickly it reacts to a scene change. Capped at
-        /// 2/s on purpose: the bulb's own documented LAN Control limit is 60 commands/min (1/s sustained), and the
-        /// rolling 60s/54-command budget in <see cref="CanSendYeelight"/> is the real, always-on backstop against
-        /// that - but the slider itself must never show (or let the user pick) a number that implies a rate past
-        /// the hardware's real limit, even though the backstop would still catch it.</summary>
+        /// <summary>Music-mode update pace (1-20 FPS). This software cap is not a certified hardware limit.</summary>
         public int YeelightFps
         {
-            get { return Math.Max(1, Math.Min(2, _config.YeelightFps)); }
-            set { _config.YeelightFps = Math.Max(1, Math.Min(2, value)); ScheduleSave(); }
+            get { return Math.Max(1, Math.Min(20, _config.YeelightFps)); }
+            set { _config.YeelightFps = Math.Max(1, Math.Min(20, value)); ScheduleSave(); }
         }
 
         /// <summary>Color updates per second sent to each Govee device. Capped at the device's own documented
@@ -809,24 +801,7 @@ namespace Ambilight.Lights
             }
         }
 
-        // Yeelight's own LAN Control firmware enforces at most 60 commands per rolling 60 s window per session -
-        // go over it and the bulb kills the session itself (not a graceful throttle). The old code only paced
-        // sends by a flat "FPS" setting with no awareness of this real budget, so a lively scene (default 8
-        // "frames"/s) blew through the 60/min allowance in well under ten seconds, every session, forever - the
-        // repeated session-killed/reconnect/SetPower(true) churn that follows is almost certainly what was
-        // hammering the bulb. A rolling window here is the actual hardware limit, independent of whatever FPS the
-        // user picks in Settings: bursts are still allowed (reacts fast to a scene change) but the 60 s total can
-        // never be exceeded, so the quota can no longer be misconfigured into a violation.
-        const int YeelightQuotaPerMinute = 54;    // a few below the real 60, for clock drift between us and the bulb
-
-        static bool CanSendYeelight(BulbState b, DateTime now)
-        {
-            var q = b.YeelightSendTimes;
-            while (q.Count > 0 && (now - q.Peek()).TotalSeconds >= 60) q.Dequeue();
-            return q.Count < YeelightQuotaPerMinute;
-        }
-
-        static void RecordYeelightSend(BulbState b, DateTime now) { b.YeelightSendTimes.Enqueue(now); }
+        // Color frames use an established MusicLink only: normal TCP quotas do not apply.
 
         void TickYeelight(BulbState b, int group, DateTime now)
         {
@@ -864,14 +839,14 @@ namespace Ambilight.Lights
             {
                 // Keep the last successful scene alive, never sample the current
                 // Chroma/canvas values or restart a dark/off fade during a pause.
-                if (!b.YeelightOff && b.LastYeelightScene >= 0 && now - b.LastSentAt >= KeepAlive && CanSendYeelight(b, now))
+                if (!b.YeelightOff && b.LastYeelightScene >= 0 && now - b.LastSentAt >= KeepAlive)
                 {
                     int scene = b.LastYeelightScene;
                     if (link.SetColorAndBrightness(scene & 0xFFFFFF, (scene >> 24) & 0x7F))
                     {
                         b.LastSentRgb = scene;
                         b.LastSentAt = now;
-                        RecordYeelightSend(b, now);
+
                     }
                     else DropLink(b);
                 }
@@ -928,16 +903,16 @@ namespace Ambilight.Lights
                 if (t >= 1 || b.YeelightFadeBright <= 1)
                 {
                     // The last step (1% to off) is the one the eye reads as a cut, so the bulb finishes it with its own fade.
-                    if (!CanSendYeelight(b, now)) return;
-                    if (link.SetPowerOffSmooth(Math.Min(fadeMs, 400))) { b.YeelightOff = true; b.YeelightFading = false; b.LastSentRgb = -1; b.LastSentAt = now; RecordYeelightSend(b, now); }
+
+                    if (link.SetPowerOffSmooth(Math.Min(fadeMs, 400))) { b.YeelightOff = true; b.YeelightFading = false; b.LastSentRgb = -1; b.LastSentAt = now; }
                     else DropLink(b);
                 }
-                else if ((now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps) && CanSendYeelight(b, now))
+                else if ((now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps))
                 {
                     int step = Math.Max(1, (int)Math.Round(b.YeelightFadeBright * (1 - t)));
                     if (step != b.YeelightFadeLastStep)
                     {
-                        if (link.SetColorAndBrightness(b.YeelightFadeColor, step)) { b.YeelightFadeLastStep = step; b.LastYeelightScene = (step << 24) | b.YeelightFadeColor; b.LastSentRgb = -1; b.LastSentAt = now; RecordYeelightSend(b, now); }
+                        if (link.SetColorAndBrightness(b.YeelightFadeColor, step)) { b.YeelightFadeLastStep = step; b.LastYeelightScene = (step << 24) | b.YeelightFadeColor; b.LastSentRgb = -1; b.LastSentAt = now; }
                         else DropLink(b);
                     }
                 }
@@ -946,10 +921,10 @@ namespace Ambilight.Lights
             b.YeelightFading = false;   // the scene is bright again: cancel any fade in progress
             b.YeelightOff = false;      // the next set_scene switches the bulb back on
 
-            if ((key != b.LastSentRgb && (now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps) && CanSendYeelight(b, now))
-                || (now - b.LastSentAt > KeepAlive && CanSendYeelight(b, now)))
+            if ((key != b.LastSentRgb && (now - b.LastSentAt).TotalMilliseconds >= 1000.0 / Math.Min(b.FpsCap, YeelightFps))
+                || (now - b.LastSentAt > KeepAlive))
             {
-                if (link.SetColorAndBrightness(b.LastNormColor, bright)) { b.LastYeelightScene = key; b.LastSentRgb = key; b.LastSentAt = now; RecordYeelightSend(b, now); }
+                if (link.SetColorAndBrightness(b.LastNormColor, bright)) { b.LastYeelightScene = key; b.LastSentRgb = key; b.LastSentAt = now; }
                 else DropLink(b);
             }
         }

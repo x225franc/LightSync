@@ -403,9 +403,30 @@ internal static class Program
         Console.WriteLine("PASS: color wheel saved-color loading, external resync, two-way selection and no feedback events.");
     }
 
+
+    private static void TestYeelightContinuousMusic()
+    {
+        using (var engine = Create(Kinds.Yeelight))
+        {
+            engine.YeelightFps = 20;
+            Assert(engine.YeelightFps == 20, "Music-mode FPS still limited to 2");
+            var b = engine.Bulbs[0]; b.Link = new MusicLink(b.Ip, b.Port, System.Net.IPAddress.Loopback);
+            b.LinkSince = DateTime.UtcNow; b.Config.Effect = LightEffect.SolidColor;
+            var start = DateTime.UtcNow;
+            for (int i = 0; i < 80; i++)
+            {
+                b.LastSentRgb = -1;
+                Invoke(engine, "TickYeelight", b, 0, start.AddMilliseconds(i * 60));
+            }
+            Assert(b.Link.Calls.Count(c => c.StartsWith("scene:")) == 80, "Music frames stopped at the normal TCP quota");
+        }
+        Console.WriteLine("PASS: 80 continuous music updates cross normal TCP quota without artificial pauses.");
+    }
+
     [STAThread]
     public static void Main()
     {
+        TestYeelightContinuousMusic();
         TestWheelBinding();
         TestAllLightsEffect();
         TestLightEffects();
